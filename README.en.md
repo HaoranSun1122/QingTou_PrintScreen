@@ -4,7 +4,7 @@
 
 <h1 align="center">QingTou <sub>轻透截图</sub></h1>
 
-<p align="center">Screen capture · Transparent PNG · GIF recording</p>
+<p align="center">Lightweight capture · Built-in cutouts · Background-free PNG · GIF recording</p>
 
 <p align="center">
   <a href="README.md">简体中文</a> · <strong>English</strong>
@@ -26,9 +26,22 @@
 
 ---
 
-**QingTou** is a native Windows screenshot tool for capturing, annotating, and extracting logos or icons into transparent PNGs. Drag a circular brush to select similar colors, then trim the canvas to the content you want to keep.
+**QingTou** is a lightweight, portable native Windows tool for screenshots, annotations, built-in cutouts, and GIF recording. Capture a region, sweep a circular brush to extract a logo or icon, and export a **background-free transparent PNG** for documents, presentations, or design layouts. Trim the extra space around the subject in one click.
 
 No sign-in is required. Image processing happens on your computer. The interface follows the Windows light/dark app setting with neutral system colors. **The app interface is currently Chinese; the documentation is available in Chinese and English.**
+
+## Why QingTou
+
+| Feature | What you get |
+| --- | --- |
+| **Lightweight and portable** | The current local x64 executable is about **1.4 MiB**. Run it directly after downloading or extracting; no installation is needed. |
+| **Cutouts during capture** | Select a region and extract logos, icons, buttons, or other assets in the same capture interface. |
+| **Background-free PNGs** | Keep the subject or remove the background, then export a PNG with alpha transparency to place over other backgrounds. |
+| **Trim extra space** | Resize the capture frame after a cutout, or use **收紧到选区** (Trim to content) to fit the canvas to the subject. |
+| **Everyday tools together** | Capture, annotate, make cutouts, and record region GIFs, with global hotkeys and tray access. |
+| **Local image processing** | Capture and cut out images on your computer, without registering an account or uploading images. |
+
+<sub>File size refers to the current local 0.9.1 x64 build and may vary by version and toolchain. Cutouts use color-based selection; see Current limitations below for complex subjects.</sub>
 
 <p align="center">
   <picture>
