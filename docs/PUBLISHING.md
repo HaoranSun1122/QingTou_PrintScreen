@@ -29,6 +29,7 @@
 
 ```text
 dist/
+  QingTou.exe
   QingTou-v0.9.1-windows-x64.zip
   QingTou-v0.9.1-source.zip
   SHA256SUMS.txt
@@ -43,9 +44,9 @@ dist/
 1. 确认当前工作区的修改已提交并推送，CMake / RC / manifest 版本一致，`main` 最新提交的 Actions 已通过；发布包应来自同一份源码。
 2. 打开 [新建 Release](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/new)。在 **Choose a tag** 输入 `v0.9.1`，点击 **Create new tag**，**Target** 选择 `main`。
 3. **Release title** 填写 `轻透截图 0.9.1 Preview`；正文可复制 [首发说明](releases/v0.9.1.md) 的内容。
-4. 在附件区域上传 `dist/QingTou-v0.9.1-windows-x64.zip` 和 `dist/SHA256SUMS.txt`。可以一并上传 `dist/QingTou-v0.9.1-source.zip`；GitHub 自动生成的 **Source code** 是源码，不能代替 Windows 运行包。
+4. 在附件区域上传 `dist/QingTou.exe`、`dist/QingTou-v0.9.1-windows-x64.zip` 和 `dist/SHA256SUMS.txt`；可一并上传 `dist/QingTou-v0.9.1-source.zip`。发行说明优先给出 EXE 下载链接，说明双击即可使用；完整 ZIP 另含指南和许可文件。GitHub 自动生成的 **Source code** 是源码，不能直接运行。
 5. 等所有附件上传完成，勾选 **This is a pre-release**。可先点 **Save draft** 检查，确认后点 **Publish release**，此时才会公开这个版本。操作参考 [GitHub 官方指南](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)。
-6. 发布后从 [Releases](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases) 实际下载 Windows zip，解压检查；再将中英文 README 和 CHANGELOG 的「尚未发布」说明更新为实际发行状态。
+6. 发布后从 [Releases](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases) 实际下载 EXE 和完整 ZIP，确认均能运行；再将中英文 README 和 CHANGELOG 的「尚未发布」说明更新为实际发行状态。
 7. 在仓库设置中按需要启用私密漏洞报告，使 `SECURITY.md` 的报告入口可用。
 
 不要把本机 `QingTou.ini`、GIF、用户截图或构建缓存附在 Release 中。图标已经嵌入 exe，运行不依赖本机开发工具。
@@ -65,7 +66,7 @@ The source is published at [HaoranSun1122/QingTou_PrintScreen](https://github.co
 2. Commit the release preparation changes and **Push origin**, then confirm **Windows build** passes for the latest `main` commit in Actions.
 3. Build and test with an x64 toolchain. Run `.\tools\package_release.ps1` to create versioned Windows/source zip files and `SHA256SUMS.txt`.
 4. Check the specific toolchain's runtime redistribution terms and retain its required notices. Smoke-test the portable zip on a Windows machine without a development environment.
-5. Open [New release](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/new), create tag `v0.9.1` targeting the verified `main` commit, and title it `轻透截图 0.9.1 Preview`. Copy the [release notes](releases/v0.9.1.md), attach the Windows zip and checksums (optionally the source zip), and select **This is a pre-release**. Wait for uploads to finish before **Publish release**; **Save draft** lets you review first. GitHub's automatic source archives are not runnable Windows packages.
-6. Download and check the published Windows zip. Update both READMEs and the changelog to reflect release availability. Enable private vulnerability reporting if you want to use that channel.
+5. Open [New release](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/new), create tag `v0.9.1` targeting the verified `main` commit, and title it `轻透截图 0.9.1 Preview`. Copy the [release notes](releases/v0.9.1.md), attach `QingTou.exe`, the full Windows zip, and checksums (optionally the source zip), and select **This is a pre-release**. Lead the download instructions with the EXE link and explain that users can double-click it to run; the full ZIP also includes guides and licensing. Wait for uploads to finish before **Publish release**; **Save draft** lets you review first. GitHub's automatic source archives are not runnable Windows packages.
+6. Download and check the published EXE and full Windows zip. Update both READMEs and the changelog to reflect release availability. Enable private vulnerability reporting if you want to use that channel.
 
 Keep `CMakeLists.txt`, Windows resource/manifest versions, the changelog, and both home pages aligned for future releases. QingTou currently has no auto-update feature; exit the old instance before replacing files.
