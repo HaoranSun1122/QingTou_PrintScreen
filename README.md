@@ -52,7 +52,7 @@
 
 ## 下载与运行
 
-**当前源码版本为 `0.9.1` 预览版，首个 GitHub Release 尚未发布。** 发布后的 Windows 包将放在 [Releases](https://github.com/HaoranSun1122/PrintScreen/releases)。现在也可以按[构建指南](docs/BUILDING.md)自行编译。
+**当前源码版本为 `0.9.1` 预览版，首个 GitHub Release 尚未发布。** 发布后的 Windows 包将放在 [Releases](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases)。现在也可以按[构建指南](docs/BUILDING.md)自行编译。
 
 1. 下载 Windows x64 压缩包，解压到有写入权限的文件夹。
 2. 运行 `QingTou.exe`；使用软件不需要安装编译器或 Python。
@@ -102,7 +102,7 @@
 
 [构建与测试](docs/BUILDING.md) · [贡献指南](CONTRIBUTING.md) · [更新记录](CHANGELOG.md) · [发布指南](docs/PUBLISHING.md)
 
-发现问题时，请提交 Windows 版本、缩放比例、软件版本和复现步骤；[问题反馈模板](https://github.com/HaoranSun1122/PrintScreen/issues/new/choose)已包含这些字段。截图中请移除私人信息。安全问题请参考 [SECURITY.md](SECURITY.md)。
+发现问题时，请提交 Windows 版本、缩放比例、软件版本和复现步骤；[问题反馈模板](https://github.com/HaoranSun1122/QingTou_PrintScreen/issues/new/choose)已包含这些字段。截图中请移除私人信息。安全问题请参考 [SECURITY.md](SECURITY.md)。
 
 ## 许可与资源
 

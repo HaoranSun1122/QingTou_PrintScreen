@@ -1,6 +1,6 @@
 # User guide
 
-[简体中文](USAGE.md) · **English** · [GitHub](https://github.com/HaoranSun1122/PrintScreen)
+[简体中文](USAGE.md) · **English** · [GitHub](https://github.com/HaoranSun1122/QingTou_PrintScreen)
 
 The current app UI is Chinese. The table below maps the labels used in this guide.
 
@@ -122,4 +122,4 @@ Configure global shortcuts from the main panel. Command-line entries: `QingTou.e
 
 **Are captures uploaded?** The current app has no upload, telemetry, or auto-update feature. Your clipboard, synced folders, and other apps may have their own synchronization behavior.
 
-HDR, mixed-DPI monitors, remote desktop, and protected content need further validation. Report problems through the [issue templates](https://github.com/HaoranSun1122/PrintScreen/issues/new/choose), with private information removed.
+HDR, mixed-DPI monitors, remote desktop, and protected content need further validation. Report problems through the [issue templates](https://github.com/HaoranSun1122/QingTou_PrintScreen/issues/new/choose), with private information removed.

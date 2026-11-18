@@ -197,11 +197,11 @@ void testBrushSelection() {
         auto* pixel=halves.pixels.data()+(y*12+x)*4;
         pixel[0]=0;pixel[1]=x<6?0:255;pixel[2]=x<6?255:0;pixel[3]=255;
     }
-    ps::SelectionMask small,large;
-    ps::brushSimilar(halves,small,{4,6},{4,6},1,18,true,false);
-    ps::brushSimilar(halves,large,{4,6},{4,6},3,18,true,false);
-    require(small[6*12+4]&&!small[6*12+8]&&large[6*12+8],"Brush diameter did not control the sampled circle");
-    require(!ps::brushSimilar(halves,large,{-1000000,-1000000},{-999999,-999999},3,18,true,false),"Off-image stroke painted pixels");
+    ps::SelectionMask narrowBrushMask,wideBrushMask;
+    ps::brushSimilar(halves,narrowBrushMask,{4,6},{4,6},1,18,true,false);
+    ps::brushSimilar(halves,wideBrushMask,{4,6},{4,6},3,18,true,false);
+    require(narrowBrushMask[6*12+4]&&!narrowBrushMask[6*12+8]&&wideBrushMask[6*12+8],"Brush diameter did not control the sampled circle");
+    require(!ps::brushSimilar(halves,wideBrushMask,{-1000000,-1000000},{-999999,-999999},3,18,true,false),"Off-image stroke painted pixels");
     ps::SelectionMask crossing;ps::brushSimilar(halves,crossing,{-1000000,6},{1000000,6},2,18,true,false);
     require(std::all_of(crossing.begin(),crossing.end(),[](uint8_t p){return p==255;}),"Clipped fast stroke left a gap");
     halves.pixels[(6*12+4)*4+3]=0;ps::SelectionMask alpha;

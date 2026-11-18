@@ -8,7 +8,7 @@
 
 ### 反馈问题
 
-使用[问题模板](https://github.com/HaoranSun1122/PrintScreen/issues/new/choose)，提供：
+使用[问题模板](https://github.com/HaoranSun1122/QingTou_PrintScreen/issues/new/choose)，提供：
 
 - 软件版本、Windows 版本、屏幕数量及每块屏幕的缩放比例。
 - 最短复现步骤、预期结果与实际结果。
@@ -39,7 +39,7 @@ Bug reproductions, documentation fixes, translations, and code improvements are 
 
 ### Report a problem
 
-Use an [issue template](https://github.com/HaoranSun1122/PrintScreen/issues/new/choose) and include:
+Use an [issue template](https://github.com/HaoranSun1122/QingTou_PrintScreen/issues/new/choose) and include:
 
 - App and Windows versions, monitor count, and per-monitor scaling.
 - Minimal reproduction steps, expected behavior, and actual behavior.

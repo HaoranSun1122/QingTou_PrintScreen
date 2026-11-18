@@ -65,7 +65,7 @@ try {
         $writer.WriteLine('')
         $writer.WriteLine('中文指南: docs/USAGE.md | English guide: docs/USAGE.en.md')
         $writer.WriteLine('License: LICENSE | Runtime and asset notices: THIRD_PARTY_NOTICES.md')
-        $writer.WriteLine('https://github.com/HaoranSun1122/PrintScreen')
+        $writer.WriteLine('https://github.com/HaoranSun1122/QingTou_PrintScreen')
     } finally { $writer.Dispose() }
 } finally { $windowsArchive.Dispose() }
 

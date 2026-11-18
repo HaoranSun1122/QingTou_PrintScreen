@@ -16,7 +16,7 @@
 
 ### 报告漏洞
 
-请优先使用仓库 [Security 页面](https://github.com/HaoranSun1122/PrintScreen/security)的私密漏洞报告入口（由维护者启用后可用）。如果入口尚未启用，可以发一个不包含漏洞细节或私人数据的 Issue，请维护者提供私下联系方式。
+请优先使用仓库 [Security 页面](https://github.com/HaoranSun1122/QingTou_PrintScreen/security)的私密漏洞报告入口（由维护者启用后可用）。如果入口尚未启用，可以发一个不包含漏洞细节或私人数据的 Issue，请维护者提供私下联系方式。
 
 请说明受影响版本、影响范围和最小复现方式。未修复前，请勿在公开 Issue 中发布敏感截图、秘密信息或可直接利用的详细步骤。项目目前优先处理最新 `0.9.x` 预览版本的问题，不承诺固定响应时限。
 
@@ -34,6 +34,6 @@ The current implementation requires no account and contains no screenshot/GIF up
 
 ### Report a vulnerability
 
-Prefer private vulnerability reporting from the repository's [Security page](https://github.com/HaoranSun1122/PrintScreen/security), once enabled by the maintainer. If it is unavailable, open an issue without sensitive details and ask for a private contact channel.
+Prefer private vulnerability reporting from the repository's [Security page](https://github.com/HaoranSun1122/QingTou_PrintScreen/security), once enabled by the maintainer. If it is unavailable, open an issue without sensitive details and ask for a private contact channel.
 
 Include affected versions, impact, and a minimal reproduction. Do not publish private captures, secrets, or detailed exploitation steps in public issues before a fix. The project prioritizes the latest `0.9.x` preview and does not promise a fixed response time.

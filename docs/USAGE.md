@@ -1,6 +1,6 @@
 # 使用指南
 
-**简体中文** · [English](USAGE.en.md) · [GitHub](https://github.com/HaoranSun1122/PrintScreen)
+**简体中文** · [English](USAGE.en.md) · [GitHub](https://github.com/HaoranSun1122/QingTou_PrintScreen)
 
 ## 运行与保存位置
 
@@ -107,4 +107,4 @@ GIF 自动保存到 `captures/`，并复制为文件，可粘贴到支持文件�
 
 **会上传我的截图吗？** 当前实现没有上传、遥测或自动更新功能。剪贴板、云盘目录和其他软件可能有各自的同步行为。
 
-HDR、混合 DPI 多屏、远程桌面和受保护内容仍需进一步验证。遇到问题请使用 [Bug 模板](https://github.com/HaoranSun1122/PrintScreen/issues/new/choose)，并移除截图里的私人信息。
+HDR、混合 DPI 多屏、远程桌面和受保护内容仍需进一步验证。遇到问题请使用 [Bug 模板](https://github.com/HaoranSun1122/QingTou_PrintScreen/issues/new/choose)，并移除截图里的私人信息。

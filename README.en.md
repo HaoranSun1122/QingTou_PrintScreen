@@ -52,7 +52,7 @@ No sign-in is required. Image processing happens on your computer. The interface
 
 ## Download and run
 
-**The source is currently at preview version `0.9.1`. The first GitHub Release has not been published yet.** Windows packages will be available on the [Releases page](https://github.com/HaoranSun1122/PrintScreen/releases). You can also [build from source](docs/BUILDING.md#english).
+**The source is currently at preview version `0.9.1`. The first GitHub Release has not been published yet.** Windows packages will be available on the [Releases page](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases). You can also [build from source](docs/BUILDING.md#english).
 
 1. Download the Windows x64 archive and extract it to a writable folder.
 2. Run `QingTou.exe`. Running the app does not require a compiler or Python.
@@ -102,7 +102,7 @@ Requires Windows, CMake 3.20+, and a C++20 toolchain. Default tests do not read 
 
 [Build and test](docs/BUILDING.md#english) · [Contributing](CONTRIBUTING.md#english) · [Changelog](CHANGELOG.md) · [Publishing](docs/PUBLISHING.md#english)
 
-When reporting a bug, include your Windows version, display scaling, app version, and reproduction steps. The [issue templates](https://github.com/HaoranSun1122/PrintScreen/issues/new/choose) include these fields. Remove private information from screenshots. See [SECURITY.md](SECURITY.md#english) for security reporting.
+When reporting a bug, include your Windows version, display scaling, app version, and reproduction steps. The [issue templates](https://github.com/HaoranSun1122/QingTou_PrintScreen/issues/new/choose) include these fields. Remove private information from screenshots. See [SECURITY.md](SECURITY.md#english) for security reporting.
 
 ## License and assets
 
