@@ -6,15 +6,8 @@
 
 <p align="center">轻量截图 · 直接抠图 · 无背景透明 PNG · GIF 录制</p>
 
-<div align="center">
-  <div style="display: inline-block; text-align: left; line-height: 1.8;">
-    <strong style="display: inline-block; vertical-align: top; margin-right: 8px;">作者：</strong>
-    <div style="display: inline-block; vertical-align: top;">
-      <strong>Dr. Sun Haoran</strong> · Shenzhen Polytechnic University<br>
-      <strong>Dr. Chen Zijie</strong> · Macau University of Science and Technology
-    </div>
-  </div>
-</div>
+<p align="center">作者：<strong>Dr. Sun Haoran</strong> · Shenzhen Polytechnic University</p>
+<p align="center"><strong>Dr. Chen Zijie</strong> · Macau University of Science and Technology</p>
 
 
 <p align="center">

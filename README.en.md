@@ -6,15 +6,8 @@
 
 <p align="center">Lightweight capture · Built-in cutouts · Background-free PNG · GIF recording</p>
 
-<div align="center">
-  <div style="display: inline-block; text-align: left; line-height: 1.8;">
-    <strong style="display: inline-block; vertical-align: top; margin-right: 8px;">By: </strong>
-    <div style="display: inline-block; vertical-align: top;">
-      <strong>Dr. Sun Haoran</strong> · Shenzhen Polytechnic University<br>
-      <strong>Dr. Chen Zijie</strong> · Macau University of Science and Technology
-    </div>
-  </div>
-</div>
+<p align="center">By <strong>Dr. Sun Haoran</strong> · Shenzhen Polytechnic University</p>
+<p align="center"><strong>Dr. Chen Zijie</strong> · Macau University of Science and Technology</p>
 
 
 <p align="center">
