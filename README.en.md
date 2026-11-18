@@ -6,7 +6,9 @@
 
 <p align="center">Lightweight capture · Built-in cutouts · Background-free PNG · GIF recording</p>
 
-<p align="center">By <strong>Sun Haoran</strong> · Shenzhen Polytechnic University</p>
+<p align="center">By <strong>Dr. Sun Haoran</strong> · Shenzhen Polytechnic University</p>
+<p align="center"><strong>Dr. Chen Zijie</strong> · Macau University of Science and Technology</p>
+
 
 <p align="center">
   <a href="README.md">简体中文</a> · <strong>English</strong>

@@ -6,7 +6,9 @@
 
 <p align="center">轻量截图 · 直接抠图 · 无背景透明 PNG · GIF 录制</p>
 
-<p align="center">作者：<strong>Sun Haoran</strong> · Shenzhen Polytechnic University</p>
+<p align="center">作者：<strong>Dr. Sun Haoran</strong> · Shenzhen Polytechnic University</p>
+<p align="center"><strong>Dr. Chen Zijie</strong> · Macau University of Science and Technology</p>
+
 
 <p align="center">
   <strong>简体中文</strong> · <a href="README.en.md">English</a>
