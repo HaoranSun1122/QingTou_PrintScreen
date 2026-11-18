@@ -166,12 +166,17 @@ void testBrushSelection() {
     require(app.magicMask[14*128+60]&&app.magicMask[50*128+90],"Brush selected only its footprint instead of expanding similar colors");
     require(app.wandSeeds.size()==1&&app.wandSeeds.back().path.size()==2,"One brush stroke was split into multiple undo actions");
     const auto full=app.magicMask;
+    require(app.preview.pixels==ps::transparencyPreview(app.rendered,app.magicMask).pixels,
+        "Incremental stroke preview differs from a full render");
+    require(!app.strokeSelector,"Finished brush stroke retained its image-sized scratch buffer");
     app.tolerance=12;app.recomputeMagicSelection();require(app.magicMask==full,"Tolerance replay lost a brush stroke");
     app.contiguous=false;app.recomputeMagicSelection();require(app.magicMask==full,"Global replay lost accumulated brush colors");
     app.contiguous=true;app.recomputeMagicSelection();
     app.beginMagicStroke({397,246},true,false);app.move({402,260});app.up({402,260});
     require(app.selectedPixels==56*40&&app.magicMask[30*128+30]&&!app.magicMask[30*128+60]&&app.magicMask[30*128+90],
         "Alt drag did not remove only the touched color");
+    require(app.preview.pixels==ps::transparencyPreview(app.rendered,app.magicMask).pixels,
+        "Subtractive stroke left stale selection outlines in the preview");
     app.undo();require(app.magicMask==full,"Undo did not restore an entire subtractive brush stroke");
     const auto historySize=app.wandSeeds.size();
     app.beginMagicStroke(from);app.move({374,255});app.up({374,255});

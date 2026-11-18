@@ -7,6 +7,7 @@
 #include <stdexcept>
 
 void testWandQuality(const std::filesystem::path& output);
+void testSelectionSessions();
 void require(bool value,const char* explanation) {if(!value)throw std::runtime_error(explanation);}
 ps::Bitmap decode(const std::filesystem::path& file,UINT frameIndex=0,UINT* count=nullptr,unsigned* delay=nullptr) {
     ps::ComPtr<IWICImagingFactory> factory;
@@ -74,6 +75,7 @@ int main(int argc,char** argv) {
         sample.pixels[3]=0;require(ps::selectSimilar(sample,{0,0},100,false)[0]==0,"Transparent pixels should not seed color selection");
         std::cout<<"PASS: connected/global magic wand, tolerance, add/subtract/invert, transparent seed\n";
         testWandQuality(output);
+        testSelectionSessions();
         auto icon=solid(48,48,255,255,255);
         for(int y=12;y<36;++y)for(int x=12;x<36;++x){const size_t i=(y*48+x)*4;icon.pixels[i]=200;icon.pixels[i+1]=80;icon.pixels[i+2]=20;}
         const auto background=ps::selectSimilar(icon,{0,0},0,true);

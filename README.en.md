@@ -16,10 +16,11 @@
   <img src="https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?style=flat-square" alt="Windows 10 / 11">
   <img src="https://img.shields.io/badge/C%2B%2B-20-555555?style=flat-square" alt="C++20">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-18A999?style=flat-square" alt="MIT License"></a>
-  <img src="https://img.shields.io/badge/Preview-0.9.1-555555?style=flat-square" alt="0.9.1 Preview">
+  <img src="https://img.shields.io/badge/Preview-0.9.2-555555?style=flat-square" alt="0.9.2 Preview">
 </p>
 
 <p align="center">
+  <a href="https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/download/v0.9.2/QingTou.exe"><strong>Download EXE</strong></a> ·
   <a href="#download-and-run">Download and run</a> ·
   <a href="docs/USAGE.en.md">User guide</a> ·
   <a href="docs/BUILDING.md#english">Build from source</a> ·
@@ -32,6 +33,8 @@
 
 No sign-in is required. Image processing happens on your computer. The interface follows the Windows light/dark app setting with neutral system colors. **The app interface is currently Chinese; the documentation is available in Chinese and English.**
 
+> **New in 0.9.2: smoother cutout strokes.** Reduced lag while dragging to select similar colors, with contiguous selection, additive selection, Alt subtraction, and whole-stroke undo preserved. See the [changelog](CHANGELOG.md).
+
 ## Why QingTou
 
 | Feature | What you get |
@@ -43,7 +46,7 @@ No sign-in is required. Image processing happens on your computer. The interface
 | **Everyday tools together** | Capture, annotate, make cutouts, and record region GIFs, with global hotkeys and tray access. |
 | **Local image processing** | Capture and cut out images on your computer, without registering an account or uploading images. |
 
-<sub>File size refers to the current local 0.9.1 x64 build and may vary by version and toolchain. Cutouts use color-based selection; see Current limitations below for complex subjects.</sub>
+<sub>File size refers to the current local x64 build and may vary by version and toolchain. Cutouts use color-based selection; see Current limitations below for complex subjects.</sub>
 
 <p align="center">
   <picture>
@@ -67,11 +70,13 @@ No sign-in is required. Image processing happens on your computer. The interface
 
 ## Download and run
 
-**The source is currently at preview version `0.9.1`. The first GitHub Release has not been published yet.** Windows packages will be available on the [Releases page](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases). You can also [build from source](docs/BUILDING.md#english).
+**Current version: `0.9.2 Preview`.** [Release notes and all downloads](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/tag/v0.9.2).
 
-1. Download the Windows x64 archive and extract it to a writable folder.
-2. Run `QingTou.exe`. Running the app does not require a compiler or Python.
-3. Exit the old instance from the tray before replacing files during an update.
+1. **Download [QingTou.exe](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/download/v0.9.2/QingTou.exe) and double-click to run. No installation or compilation is needed.**
+2. Keep the EXE in a writable folder so it can save settings and recorded GIFs.
+3. To update, exit the old instance from the tray and replace the EXE. Keep your existing `QingTou.ini` to retain settings.
+
+The [full portable ZIP](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/download/v0.9.2/QingTou-v0.9.2-windows-x64.zip) also includes usage guides, licensing, and third-party notices. `Source code` and `*-source.zip` archives are for developers; see the [build guide](docs/BUILDING.md#english) to compile them.
 
 Targets **SDR desktops on Windows 10 version 2004+ and Windows 11**. Closing the panel keeps the app in the tray; right-click its tray icon to exit. Settings are stored in `QingTou.ini` beside the executable, and GIFs are saved to `captures/` by default.
 

@@ -109,6 +109,7 @@ struct App {
     POINT brushCursor{},strokeStart{},strokeLast{};
     bool brushHover=false,brushTracking=false,strokeSubtract=false,strokeOwnsAction=false,strokeReplace=false;
     size_t strokeBeforeCount=0;
+    std::unique_ptr<ps::SimilarSelection> strokeSelector;
     std::wstring dialogText;
 
     static App& from(HWND window) {return *reinterpret_cast<App*>(GetWindowLongPtrW(window,GWLP_USERDATA));}
@@ -330,15 +331,22 @@ struct App {
         if(overlay)InvalidateRect(overlay,nullptr,FALSE);
         if(toolbar)InvalidateRect(toolbar,nullptr,FALSE);
     }
+    void refreshMagicPreview(RECT changed) {
+        RECT dirty=ps::updateTransparencyPreview(preview,rendered,magicMask,changed);
+        if(overlay&&!IsRectEmpty(&dirty)){OffsetRect(&dirty,selection.left,selection.top);InvalidateRect(overlay,&dirty,FALSE);}
+        if(toolbar){RECT hint{12,124,604,146};InvalidateRect(toolbar,&hint,FALSE);}
+    }
     void clearMagicSelection() {
         if(drag==Drag::Magic){drag=Drag::None;if(overlay&&GetCapture()==overlay)ReleaseCapture();}
         strokeOwnsAction=false;
+        strokeSelector.reset();
         if(toolbar)KillTimer(toolbar,TIMER_WAND);
         wandUpdatePending=false;
         magicMask=ps::SelectionMask();wandSeeds.clear();wandReference.reset();selectedPixels=0;
     }
     void ensureWandReference() {if(!wandReference)wandReference=std::make_shared<const ps::Bitmap>(rendered);}
     void recomputeMagicSelection() {
+        strokeSelector.reset();
         if(toolbar)KillTimer(toolbar,TIMER_WAND);
         wandUpdatePending=false;
         if(rendered.empty())return;
@@ -349,9 +357,10 @@ struct App {
             auto localMask=ps::reframeMask(accumulated,canvas,seed.bounds);
             if(seed.mode==2)ps::invertSelection(localMask,*seed.source);
             else {
-                ps::combineSelection(localMask,ps::selectSimilar(*seed.source,seed.point,tolerance,contiguous),seed.mode==1);
+                ps::SimilarSelection selector(*seed.source,tolerance,contiguous);
+                selector.select(localMask,seed.point,seed.mode==1);
                 for(size_t i=1;i<seed.path.size();++i)
-                    ps::brushSimilar(*seed.source,localMask,seed.path[i-1],seed.path[i],seed.radius,tolerance,contiguous,seed.mode==1);
+                    selector.brush(localMask,seed.path[i-1],seed.path[i],seed.radius,seed.mode==1);
             }
             for(int y=0;y<height(seed.bounds);++y)
                 std::copy_n(localMask.begin()+static_cast<size_t>(y)*width(seed.bounds),width(seed.bounds),
@@ -361,12 +370,19 @@ struct App {
         selectedPixels=static_cast<size_t>(std::count_if(magicMask.begin(),magicMask.end(),[](uint8_t value){return value!=0;}));refreshPreview();
     }
     bool selectMagic(POINT p,bool subtract=false,bool add=true) {
+        if(wandUpdatePending)recomputeMagicSelection();
         if(!subtract&&!add)clearMagicSelection();
         ensureWandReference();
         const POINT seed=local(p);const int mode=subtract?1:0;
         const bool append=wandSeeds.empty()||wandSeeds.back().source!=wandReference||!wandSeeds.back().path.empty()||wandSeeds.back().mode!=mode||wandSeeds.back().point.x!=seed.x||wandSeeds.back().point.y!=seed.y;
-        if(append)wandSeeds.push_back({seed,mode,{},0,wandReference,selection});
-        recomputeMagicSelection();return append;
+        if(append) {
+            wandSeeds.push_back({seed,mode,{},0,wandReference,selection});
+            ps::SimilarSelection selector(*wandReference,tolerance,contiguous);
+            selector.select(magicMask,seed,subtract);
+            selectedPixels=static_cast<size_t>(std::count_if(magicMask.begin(),magicMask.end(),[](uint8_t value){return value!=0;}));
+            refreshPreview();
+        }
+        return append;
     }
     void beginMagicStroke(POINT p,bool subtract=false,bool add=true) {
         if(wandUpdatePending)recomputeMagicSelection();
@@ -384,15 +400,20 @@ struct App {
         auto& action=wandSeeds.back();
         if(action.path.empty()){action.path.push_back(strokeStart);action.radius=strokeRadius;}
         action.path.push_back(next);
-        const bool changed=ps::brushSimilar(rendered,magicMask,strokeLast,next,strokeRadius,tolerance,contiguous,strokeSubtract);
+        if(!strokeSelector)strokeSelector=std::make_unique<ps::SimilarSelection>(rendered,tolerance,contiguous);
+        const auto changed=strokeSelector->brush(magicMask,strokeLast,next,strokeRadius,strokeSubtract);
         strokeLast=next;
-        if(changed){selectedPixels=static_cast<size_t>(std::count_if(magicMask.begin(),magicMask.end(),[](uint8_t v){return v!=0;}));refreshPreview();}
+        if(changed.pixels) {
+            selectedPixels=static_cast<size_t>(static_cast<int64_t>(selectedPixels)+changed.selectedDelta);
+            refreshMagicPreview(changed.bounds);
+        }
     }
     void finishMagicStroke() {
         if(drag!=Drag::Magic)return;
         drag=Drag::None;
         if(strokeOwnsAction&&!strokeReplace&&selectedPixels==strokeBeforeCount)wandSeeds.pop_back();
         strokeOwnsAction=false;
+        strokeSelector.reset();updateTightButton();
         if(overlay&&GetCapture()==overlay)ReleaseCapture();
     }
     void invalidateBrushCursor() {
@@ -862,6 +883,7 @@ struct App {
                 app.finishMagicStroke();app.setBrushRadius(static_cast<int>(SendMessageW(app.brushSlider,TBM_GETPOS,0,0)));return 0;
             }
             if(message==WM_HSCROLL&&reinterpret_cast<HWND>(l)==app.toleranceSlider){
+                app.finishMagicStroke();
                 app.tolerance=static_cast<int>(SendMessageW(app.toleranceSlider,TBM_GETPOS,0,0));
                 InvalidateRect(window,nullptr,FALSE);
                 if(LOWORD(w)==TB_ENDTRACK||!app.wandUpdatePending) {
