@@ -1,0 +1,67 @@
+name: 问题反馈 / Bug report
+description: 报告可复现的问题 / Report a reproducible problem
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请提供最小复现步骤，并移除截图中的私人信息。安全问题请参考 SECURITY.md。
+        Please include a minimal reproduction and remove private data from captures. See SECURITY.md for vulnerability reporting.
+  - type: input
+    id: version
+    attributes:
+      label: 软件版本 / App version
+      placeholder: "0.9.1 / built from commit ..."
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows 版本 / Windows version
+      placeholder: "Windows 11 24H2, x64"
+    validations:
+      required: true
+  - type: input
+    id: displays
+    attributes:
+      label: 屏幕与缩放 / Displays and scaling
+      placeholder: "1 monitor, 2560×1440, 125%, SDR / 2 monitors with different scaling"
+  - type: dropdown
+    id: area
+    attributes:
+      label: 相关功能 / Affected feature
+      options:
+        - 截图与标注 / Capture and annotation
+        - 魔棒抠图与拖选 / Cutout and brush selection
+        - 裁切与透明 PNG / Cropping and transparent PNG
+        - GIF 录制 / GIF recording
+        - 快捷键与托盘 / Hotkeys and tray
+        - 构建与运行 / Build and startup
+        - 其他 / Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / Steps to reproduce
+      placeholder: "1. ...\n2. ...\n3. ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为 / Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为 / Actual behavior
+      description: 包括错误提示原文 / Include the exact error message, if any.
+    validations:
+      required: true
+  - type: textarea
+    id: attachments
+    attributes:
+      label: 截图或测试图片 / Screenshots or test images
+      description: 可在此拖入附件，请先移除个人信息。 / Drag attachments here after removing private information.

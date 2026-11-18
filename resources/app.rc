@@ -1,0 +1,55 @@
+#include <windows.h>
+#include <commctrl.h>
+#pragma code_page(65001)
+1 ICON "brand/app.ico"
+1 RT_MANIFEST "app.manifest"
+101 DIALOGEX 0, 0, 260, 110
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "轻透截图 · 添加文字"
+FONT 10, "Microsoft YaHei UI"
+BEGIN
+  LTEXT "输入标注文字：", -1, 10, 8, 235, 14
+  EDITTEXT 1001, 10, 25, 240, 48, ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | WS_TABSTOP
+  DEFPUSHBUTTON "确定", IDOK, 139, 83, 52, 18
+  PUSHBUTTON "取消", IDCANCEL, 198, 83, 52, 18
+END
+102 DIALOGEX 0, 0, 285, 137
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "轻透截图 · 快捷键"
+FONT 10, "Microsoft YaHei UI"
+BEGIN
+  LTEXT "截图 PNG", -1, 12, 17, 75, 16
+  CONTROL "", 1002, "msctls_hotkey32", WS_BORDER | WS_TABSTOP, 90, 13, 180, 22
+  LTEXT "录制 GIF", -1, 12, 51, 75, 16
+  CONTROL "", 1003, "msctls_hotkey32", WS_BORDER | WS_TABSTOP, 90, 47, 180, 22
+  LTEXT "快捷键被占用时，请换一个组合。", -1, 12, 83, 255, 16
+  DEFPUSHBUTTON "保存", IDOK, 159, 109, 52, 18
+  PUSHBUTTON "取消", IDCANCEL, 218, 109, 52, 18
+END
+
+1 VERSIONINFO
+FILEVERSION 0,9,1,0
+PRODUCTVERSION 0,9,1,0
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0x0L
+FILEOS 0x40004L
+FILETYPE 0x1L
+FILESUBTYPE 0x0L
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "080404B0"
+    BEGIN
+      VALUE "FileDescription", "轻透截图 · 透明 PNG 与 GIF 录制\0"
+      VALUE "FileVersion", "0.9.1.0\0"
+      VALUE "InternalName", "QingTou\0"
+      VALUE "OriginalFilename", "QingTou.exe\0"
+      VALUE "ProductName", "轻透截图\0"
+      VALUE "ProductVersion", "0.9.1\0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x0804, 1200
+  END
+END

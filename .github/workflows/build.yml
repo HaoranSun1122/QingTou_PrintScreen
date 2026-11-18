@@ -1,0 +1,32 @@
+name: Windows build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure
+        run: cmake -S . -B build -A x64 -DBUILD_TESTING=ON -DQINGTOU_ENABLE_DESKTOP_TESTS=OFF
+      - name: Build
+        run: cmake --build build --config Release --parallel 2
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Package portable build and source
+        shell: pwsh
+        run: .\tools\package_release.ps1
+      - name: Upload packages and checksums
+        uses: actions/upload-artifact@v7
+        with:
+          name: QingTou-Windows
+          path: |
+            dist/QingTou-v*.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error

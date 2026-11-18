@@ -1,0 +1,13 @@
+/build/
+/build-mingw/
+/build-msvc/
+/dist/
+/test-output/
+**/captures/
+*.ini
+*.tmp
+/.vs/
+/.vscode/
+__pycache__/
+*.user
+*.suo
