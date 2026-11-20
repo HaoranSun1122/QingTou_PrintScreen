@@ -19,11 +19,11 @@
   <img src="https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?style=flat-square" alt="Windows 10 / 11">
   <img src="https://img.shields.io/badge/C%2B%2B-20-555555?style=flat-square" alt="C++20">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-18A999?style=flat-square" alt="MIT License"></a>
-  <img src="https://img.shields.io/badge/Dev-0.9.6-555555?style=flat-square" alt="0.9.6 Development">
+  <a href="https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/tag/v0.9.6"><img src="https://img.shields.io/badge/Version-0.9.6-555555?style=flat-square" alt="Version 0.9.6"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/download/v0.9.2/QingTou.exe"><strong>Download EXE (0.9.2)</strong></a> ·
+  <a href="https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/download/v0.9.6/QingTou.exe"><strong>Download EXE (0.9.6)</strong></a> ·
   <a href="#download-and-run">Download and run</a> ·
   <a href="docs/USAGE.en.md">User guide</a> ·
   <a href="docs/BUILDING.md#english">Build from source</a> ·
@@ -36,7 +36,7 @@
 
 No sign-in is required. Image processing happens on your computer. The interface follows the Windows light/dark app setting with neutral system colors. **The app interface is currently Chinese; the documentation is available in Chinese and English.**
 
-> **Coming in 0.9.6: guided cutouts and better capture tools.** Box a subject, correct it with Keep/Remove brushes, refine edges, and preselect windows. Text, color, and mosaic tools are improved, along with thin-detail recovery in large images. Public downloads below are still **0.9.2 Preview and do not include these new features**. Read the [0.9.6 release notes](docs/releases/v0.9.6.md) or the [full changelog](CHANGELOG.md).
+> **0.9.6 is available: guided cutouts and better capture tools.** Box a subject, correct it with Keep/Remove brushes, refine edges, and preselect windows. Text, color, and mosaic tools are improved, along with thin-detail recovery in large images. Visit the [0.9.6 release page](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/tag/v0.9.6) or read the [full changelog](CHANGELOG.md).
 
 ## Why QingTou
 
@@ -77,13 +77,13 @@ No sign-in is required. Image processing happens on your computer. The interface
 
 ## Download and run
 
-**The current source and local build are version `0.9.6`, not yet published on GitHub.** Public downloads below are `0.9.2 Preview`; [browse all published releases](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases).
+**Version `0.9.6` is now available.** Download the EXE below or [view the release notes and all assets](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/tag/v0.9.6).
 
-1. **Download [QingTou.exe](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/download/v0.9.2/QingTou.exe) and double-click to run. No installation or compilation is needed.**
+1. **Download [QingTou.exe](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/download/v0.9.6/QingTou.exe) and double-click to run. No installation or compilation is needed.**
 2. Keep the EXE in a writable folder so it can save settings and recorded GIFs.
 3. To update, exit the old instance from the tray and replace the EXE. Keep your existing `QingTou.ini` to retain settings.
 
-The [full portable ZIP](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/download/v0.9.2/QingTou-v0.9.2-windows-x64.zip) also includes usage guides, licensing, and third-party notices. `Source code` and `*-source.zip` archives are for developers; see the [build guide](docs/BUILDING.md#english) to compile them.
+The [full portable ZIP](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/download/v0.9.6/QingTou-v0.9.6-windows-x64.zip) also includes usage guides, licensing, and third-party notices. `Source code` and `*-source.zip` archives are for developers; see the [build guide](docs/BUILDING.md#english) to compile them.
 
 Targets **SDR desktops on Windows 10 version 2004+ and Windows 11**. Closing the panel keeps the app in the tray; right-click its tray icon to exit. Settings are stored in `QingTou.ini` beside the executable, and GIFs are saved to `captures/` by default.
 

@@ -19,11 +19,11 @@
   <img src="https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?style=flat-square" alt="Windows 10 / 11">
   <img src="https://img.shields.io/badge/C%2B%2B-20-555555?style=flat-square" alt="C++20">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-18A999?style=flat-square" alt="MIT License"></a>
-  <img src="https://img.shields.io/badge/Dev-0.9.6-555555?style=flat-square" alt="0.9.6 Development">
+  <a href="https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/tag/v0.9.6"><img src="https://img.shields.io/badge/Version-0.9.6-555555?style=flat-square" alt="Version 0.9.6"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/download/v0.9.2/QingTou.exe"><strong>下载 EXE（0.9.2）</strong></a> ·
+  <a href="https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/download/v0.9.6/QingTou.exe"><strong>下载 EXE（0.9.6）</strong></a> ·
   <a href="#下载与运行">下载与运行</a> ·
   <a href="docs/USAGE.md">使用指南</a> ·
   <a href="docs/BUILDING.md">从源码构建</a> ·
@@ -36,7 +36,7 @@
 
 不需要登录，图像处理在本机完成。界面使用系统中性色，跟随 Windows 应用浅色 / 深色设置；当前软件界面为中文，项目文档提供中英文版本。
 
-> **0.9.6 待发布：智能抠图与截图体验升级。** 新增框选主体、保留 / 去除画笔、边缘精修和窗口预选，增强文字、颜色与马赛克工具，并改善大图细线保留。下方公开下载仍为 **0.9.2 Preview，不包含本次新增功能**。查看 [0.9.6 发行说明](docs/releases/v0.9.6.md) · [完整更新记录](CHANGELOG.md)。
+> **0.9.6 已发布：智能抠图与截图体验升级。** 新增框选主体、保留 / 去除画笔、边缘精修和窗口预选，增强文字、颜色与马赛克工具，并改善大图细线保留。查看 [0.9.6 发行页面](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/tag/v0.9.6) · [完整更新记录](CHANGELOG.md)。
 
 ## 为什么选择轻透截图
 
@@ -77,13 +77,13 @@
 
 ## 下载与运行
 
-**当前源码与本地构建为 `0.9.6`，尚未发布到 GitHub。** 下方公开下载为 `0.9.2 Preview`；[查看全部已发布版本](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases)。
+**当前版本 `0.9.6` 已发布。** 下载下方 EXE 即可使用，或[查看本次发行说明与全部附件](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/tag/v0.9.6)。
 
-1. **直接下载 [QingTou.exe](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/download/v0.9.2/QingTou.exe)，双击即可使用，无需安装或编译。**
+1. **直接下载 [QingTou.exe](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/download/v0.9.6/QingTou.exe)，双击即可使用，无需安装或编译。**
 2. 将 EXE 放在有写入权限的文件夹，方便保存设置和录制的 GIF。
 3. 更新前先从托盘退出旧版，再用新版 EXE 替换原文件；保留原有 `QingTou.ini` 即可继续使用已有设置。
 
-也可以下载[完整便携 ZIP](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/download/v0.9.2/QingTou-v0.9.2-windows-x64.zip)，其中另含使用指南、许可证和第三方声明。`Source code` 与 `*-source.zip` 为开发者提供源码；自行编译请参考[构建指南](docs/BUILDING.md)。
+也可以下载[完整便携 ZIP](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/download/v0.9.6/QingTou-v0.9.6-windows-x64.zip)，其中另含使用指南、许可证和第三方声明。`Source code` 与 `*-source.zip` 为开发者提供源码；自行编译请参考[构建指南](docs/BUILDING.md)。
 
 面向 **Windows 10 2004+ / Windows 11 的 SDR 桌面**。关闭主面板后软件留在托盘，右键托盘图标可以退出。设置保存在 exe 旁的 `QingTou.ini`，GIF 默认保存在 `captures/`。
 
