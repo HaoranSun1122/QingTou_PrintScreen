@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/download/v0.9.2/QingTou.exe"><strong>Download EXE</strong></a> ·
+  <a href="https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/download/v0.9.2/QingTou.exe"><strong>Download EXE (0.9.2)</strong></a> ·
   <a href="#download-and-run">Download and run</a> ·
   <a href="docs/USAGE.en.md">User guide</a> ·
   <a href="docs/BUILDING.md#english">Build from source</a> ·
@@ -35,7 +35,7 @@
 
 No sign-in is required. Image processing happens on your computer. The interface follows the Windows light/dark app setting with neutral system colors. **The app interface is currently Chinese; the documentation is available in Chinese and English.**
 
-> **Local development version 0.9.6: guided cutouts, window preselection, and annotation improvements.** Integrates the provided 0.9.5 source and improves thin-detail recovery inside large, loose boxes. Public downloads still link to a published version; see the [changelog](CHANGELOG.md) for upcoming features.
+> **Coming in 0.9.6: guided cutouts and better capture tools.** Box a subject, correct it with Keep/Remove brushes, refine edges, and preselect windows. Text, color, and mosaic tools are improved, along with thin-detail recovery in large images. Public downloads below are still **0.9.2 Preview and do not include these new features**. Read the [0.9.6 release notes](docs/releases/v0.9.6.md) or the [full changelog](CHANGELOG.md).
 
 ## Why QingTou
 
@@ -93,6 +93,8 @@ Targets **SDR desktops on Windows 10 version 2004+ and Windows 11**. Closing the
 1. After capturing, click **智能抠图** and box the entire subject, leaving some background outside the box.
 2. Use **保留画笔** (Keep) to recover missing content and **去除画笔** (Remove) to clear unwanted background. Adjust size with the wheel and undo with `Ctrl + Z`.
 3. Compare **边缘精修** (Edge refinement), click **应用** (Apply), then trim to content and save the PNG.
+
+![Guided cutout toolbar with Keep/Remove brushes, edge refinement, and Apply](docs/toolbar-smart.png)
 
 The original color-selection workflow remains available:
 

@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/download/v0.9.2/QingTou.exe"><strong>直接下载 EXE</strong></a> ·
+  <a href="https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/download/v0.9.2/QingTou.exe"><strong>下载 EXE（0.9.2）</strong></a> ·
   <a href="#下载与运行">下载与运行</a> ·
   <a href="docs/USAGE.md">使用指南</a> ·
   <a href="docs/BUILDING.md">从源码构建</a> ·
@@ -35,7 +35,7 @@
 
 不需要登录，图像处理在本机完成。界面使用系统中性色，跟随 Windows 应用浅色 / 深色设置；当前软件界面为中文，项目文档提供中英文版本。
 
-> **0.9.6 本地开发版：框选智能抠图、窗口预选与标注增强。** 在已提供的 0.9.5 源码基础上整合，并改进大图宽框下的细线漏检。公开下载仍指向已发布版本；新版功能见[更新记录](CHANGELOG.md)。
+> **0.9.6 待发布：智能抠图与截图体验升级。** 新增框选主体、保留 / 去除画笔、边缘精修和窗口预选，增强文字、颜色与马赛克工具，并改善大图细线保留。下方公开下载仍为 **0.9.2 Preview，不包含本次新增功能**。查看 [0.9.6 发行说明](docs/releases/v0.9.6.md) · [完整更新记录](CHANGELOG.md)。
 
 ## 为什么选择轻透截图
 
@@ -93,6 +93,8 @@
 1. 截图后点「智能抠图」，拖框圈住完整主体，让框外留一些背景样本。
 2. 用「保留画笔」补回漏掉的内容，用「去除画笔」涂掉残留背景；滚轮调大小，`Ctrl + Z` 撤销。
 3. 查看「边缘精修」效果，点「应用」，再用「收紧到选区」裁掉空白并保存 PNG。
+
+![智能抠图工具栏：保留画笔、去除画笔、边缘精修与应用](docs/toolbar-smart.png)
 
 也可以继续使用原来的魔棒方式：
 
