@@ -41,6 +41,11 @@ Bitmap crop(const Bitmap& source, RECT area);
 Bitmap fitWidth(const Bitmap& source, int maxWidth);
 Bitmap dimmed(const Bitmap& source);
 void drawBitmap(HDC dc, const Bitmap& bitmap, int x, int y);
+void drawBitmapRows(HDC dc, const Bitmap& bitmap, int x, int y, RECT dirty);
+constexpr int MinTextSize=8, MaxTextSize=144;
+constexpr int MinMosaicBlock=4, MaxMosaicBlock=64;
+// region is clipped to the bitmap by the caller. Pixel alpha is preserved.
+void pixelatePremultiplied(uint8_t* pixels, size_t stride, RECT region, int blockSize);
 enum class Tool { None, Rectangle, Arrow, Pen, Text, Mosaic, Cutout };
 struct Annotation {
     Tool tool = Tool::None;
@@ -50,6 +55,24 @@ struct Annotation {
     float thickness = 3;
     std::vector<uint8_t> opacity; // Cutout operation: multiplier for each pixel's alpha.
     uint8_t outsideOpacity = 255; // Crop expansion after remove (255) or keep (0).
+    int textSize = 22; // Physical pixels in the exported screenshot.
+    int mosaicBlock = 12;
+};
+RECT textAnnotationBounds(const Annotation& annotation, POINT origin, int width, int height);
+
+class PenCoverage {
+    int width_, height_;
+    float radius_;
+    std::vector<uint8_t> coverage_;
+    RECT bounds_{};
+public:
+    PenCoverage(int width, int height, float thickness);
+    RECT extend(POINT from, POINT to);
+    RECT bounds() const { return bounds_; }
+    // The destination and optional separate source both use premultiplied BGRA.
+    // An opaque screenshot preview already satisfies that representation.
+    void blend(uint8_t* destination, size_t stride, const uint8_t* source,
+               RECT region, uint32_t color) const;
 };
 Bitmap annotate(const Bitmap& base, const std::vector<Annotation>& annotations);
 std::vector<uint8_t> pngBytes(const Bitmap& bitmap);

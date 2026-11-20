@@ -18,7 +18,7 @@
   <img src="https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?style=flat-square" alt="Windows 10 / 11">
   <img src="https://img.shields.io/badge/C%2B%2B-20-555555?style=flat-square" alt="C++20">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-18A999?style=flat-square" alt="MIT License"></a>
-  <img src="https://img.shields.io/badge/Preview-0.9.2-555555?style=flat-square" alt="0.9.2 Preview">
+  <img src="https://img.shields.io/badge/Dev-0.9.6-555555?style=flat-square" alt="0.9.6 Development">
 </p>
 
 <p align="center">
@@ -35,14 +35,15 @@
 
 No sign-in is required. Image processing happens on your computer. The interface follows the Windows light/dark app setting with neutral system colors. **The app interface is currently Chinese; the documentation is available in Chinese and English.**
 
-> **New in 0.9.2: smoother cutout strokes.** Reduced lag while dragging to select similar colors, with contiguous selection, additive selection, Alt subtraction, and whole-stroke undo preserved. See the [changelog](CHANGELOG.md).
+> **Local development version 0.9.6: guided cutouts, window preselection, and annotation improvements.** Integrates the provided 0.9.5 source and improves thin-detail recovery inside large, loose boxes. Public downloads still link to a published version; see the [changelog](CHANGELOG.md) for upcoming features.
 
 ## Why QingTou
 
 | Feature | What you get |
 | --- | --- |
-| **Lightweight and portable** | The current local x64 executable is about **1.4 MiB**. Run it directly after downloading or extracting; no installation is needed. |
+| **Lightweight and portable** | The current local x64 executable is about **1.5 MiB**. Run it directly after downloading or extracting; no installation is needed. |
 | **Cutouts during capture** | Select a region and extract logos, icons, buttons, or other assets in the same capture interface. |
+| **Guided cutouts and corrections** | Box the subject, estimate the background, and correct with Keep/Remove brushes, including logos on gradients. |
 | **Background-free PNGs** | Keep the subject or remove the background, then export a PNG with alpha transparency to place over other backgrounds. |
 | **Trim extra space** | Resize the capture frame after a cutout, or use **收紧到选区** (Trim to content) to fit the canvas to the subject. |
 | **Everyday tools together** | Capture, annotate, make cutouts, and record region GIFs, with global hotkeys and tray access. |
@@ -64,6 +65,9 @@ No sign-in is required. Image processing happens on your computer. The interface
 | Select a region; add rectangles, arrows, pen strokes, text, or mosaic | Drag to select colors, add/subtract regions, preserve transparency, trim blank space | Record a region; stop with a hotkey; save and copy the file |
 
 - **Color-based cutout**: select similar colors in flat backgrounds, mild gradients, shadows, and compression noise.
+- **Guided cutout**: box the subject, preview transparency, correct with Keep/Remove brushes, and compare original/refined edges.
+- **Window preselection**: hover to highlight a window and click to capture; empty desktop areas fall back to the monitor, with free dragging still available.
+- **Better annotations**: editable 8–144 px text, custom RGB colors, 4–64 px mosaic blocks, and incremental pen previews.
 - **Continuous selection**: hold the left mouse button and sweep a circular brush. Undo a whole stroke in one step.
 - **Tight output bounds**: drag the blue capture border directly or fit the PNG canvas to selected content.
 - **Real transparency**: PNG saving and copying preserve alpha. The checkerboard and selection tint are preview-only.
@@ -72,7 +76,7 @@ No sign-in is required. Image processing happens on your computer. The interface
 
 ## Download and run
 
-**Current version: `0.9.2 Preview`.** [Release notes and all downloads](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/tag/v0.9.2).
+**The current source and local build are version `0.9.6`, not yet published on GitHub.** Public downloads below are `0.9.2 Preview`; [browse all published releases](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases).
 
 1. **Download [QingTou.exe](https://github.com/HaoranSun1122/QingTou_PrintScreen/releases/download/v0.9.2/QingTou.exe) and double-click to run. No installation or compilation is needed.**
 2. Keep the EXE in a writable folder so it can save settings and recorded GIFs.
@@ -83,6 +87,14 @@ The [full portable ZIP](https://github.com/HaoranSun1122/QingTou_PrintScreen/rel
 Targets **SDR desktops on Windows 10 version 2004+ and Windows 11**. Closing the panel keeps the app in the tray; right-click its tray icon to exit. Settings are stored in `QingTou.ini` beside the executable, and GIFs are saved to `captures/` by default.
 
 ## Make a transparent PNG in three steps
+
+**Guided cutout: box the subject → correct → apply and save**
+
+1. After capturing, click **智能抠图** and box the entire subject, leaving some background outside the box.
+2. Use **保留画笔** (Keep) to recover missing content and **去除画笔** (Remove) to clear unwanted background. Adjust size with the wheel and undo with `Ctrl + Z`.
+3. Compare **边缘精修** (Edge refinement), click **应用** (Apply), then trim to content and save the PNG.
+
+The original color-selection workflow remains available:
 
 **Capture → Select content → Trim and save**
 
@@ -110,6 +122,7 @@ Alternatively, select a background and click **移除** (Remove). Circle size an
 ## Current limitations
 
 - Selection uses color and connectivity. Similar foreground/background colors, strong shadows, complex photos, hair, and glass can require manual additions or subtraction.
+- Guided cutouts need background samples; mark the background with Remove when boxing the whole image. Large-image detail recovery works best with reliable smooth-gradient estimates. Tighten boxes and correct manually for complex textures.
 - GIFs have no audio. The target is 10 fps, up to 60 seconds, with a maximum width of 1280 px. Actual frame rate depends on content and hardware.
 - Some apps discard alpha when pasting. Save a PNG and import it as a file if that happens.
 - HDR, remote desktop, protected content, and mixed-DPI multi-monitor configurations need further validation.

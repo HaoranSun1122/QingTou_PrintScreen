@@ -6,6 +6,34 @@
 
 This file records user-visible changes. Version metadata is defined in `CMakeLists.txt`, the Windows resources, and the application manifest.
 
+## 0.9.6 — Unreleased / 尚未发布
+
+整合用户提供的 0.9.5 源码增强，保留本项目的双语文档、作者署名、许可与发布流程。
+
+Integrates enhancements from the user-provided 0.9.5 source while retaining this project's bilingual documentation, author credits, licensing, and release workflow.
+
+### 抠图与截图 / Cutouts and capture
+
+- 新增框选智能抠图、保留 / 去除画笔、原图对照、边缘精修、重置、应用及撤销。
+- 新增窗口悬停预选、显示器回退预选和单击截图，保留自由拖框。
+- 魔棒增加可选「跟随渐变」，保留原来的连续区域 / 全图匹配与拖选缓存。
+- 改进大图宽框下的细节采样，避免只采样网格中心漏掉细线；在原图像素上恢复背景，防止线条膨胀成网格块。
+- 新增 2560×1440 宽框细线、单像素内容、空渐变背景和去除标记优先级回归测试。
+- Add guided cutouts, correction brushes, original comparison, edge refinement, reset/apply, and undo.
+- Add window/monitor preselection and click-to-capture alongside free dragging.
+- Add optional gradient following to the existing color-selection tool.
+- Preserve strong foreground evidence inside coarse cells on large smooth-gradient images and remove background at original resolution.
+- Add regression tests for large loose boxes, one-pixel details, empty gradients, and correction priority.
+
+### 标注与交付 / Annotations and distribution
+
+- 文字支持 8–144 px 字号和已有文字编辑，自定义 RGB 颜色，马赛克支持 4–64 px。
+- 画笔按下即时显示，增量绘制并按变化行刷新；一笔撤销与导出覆盖率一致。
+- 更新中英文使用指南；Windows 构建产物增加可直接下载的 EXE。
+- Support editable 8–144 px text, custom RGB colors, and 4–64 px mosaic blocks.
+- Preview pen strokes incrementally with row-limited repainting and consistent export coverage.
+- Update bilingual guides and include the executable in Windows CI artifacts.
+
 ## 0.9.2 — 2026-11-18 · Preview / 预览版
 
 ### 拖动抠图提速 / Faster cutout strokes

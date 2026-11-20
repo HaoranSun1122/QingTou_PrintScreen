@@ -44,7 +44,7 @@ $windowsArchivePath = Join-Path $releaseDirectory "QingTou-v$releaseVersion-wind
 $windowsArchive = New-Archive $windowsArchivePath
 try {
     Add-ArchiveFile $windowsArchive $executableFile.FullName 'QingTou.exe'
-    foreach ($relativePath in @('LICENSE','THIRD_PARTY_NOTICES.md','docs/USAGE.md','docs/USAGE.en.md','docs/toolbar-cutout.png')) {
+    foreach ($relativePath in @('LICENSE','THIRD_PARTY_NOTICES.md','docs/USAGE.md','docs/USAGE.en.md','docs/toolbar-cutout.png','docs/toolbar-smart.png')) {
         Add-ArchiveFile $windowsArchive (Join-Path $projectRoot $relativePath) $relativePath
     }
     foreach ($licenseFile in Get-ChildItem -LiteralPath (Join-Path $projectRoot 'licenses') -File) {

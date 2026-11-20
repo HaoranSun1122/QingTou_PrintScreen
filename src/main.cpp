@@ -1,6 +1,7 @@
 #include "image.h"
 #include "recorder.h"
 #include "selection.h"
+#include "smart_cutout.h"
 #include "theme.h"
 #include <windowsx.h>
 #include <commctrl.h>
@@ -11,7 +12,9 @@
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -21,13 +24,89 @@ constexpr UINT_PTR TIMER_CAPTURE=1;
 constexpr UINT_PTR TIMER_WAND=1;
 const UINT WM_TASKBAR_RECREATED=RegisterWindowMessageW(L"TaskbarCreated");
 constexpr int ID_PNG=10,ID_GIF=11,ID_FOLDER=12,ID_KEYS=13,ID_QUIT=14,ID_PANEL=15,ID_STOP=16,ID_HIDE_ON_CAPTURE=17;
-constexpr std::array<uint32_t,4> COLORS={0xFF535D,0xFFD166,0x36D1DC,0xFFFFFF};
-constexpr std::array<const wchar_t*,12> TOOL_LABELS={L"矩形",L"箭头",L"画笔",L"文字",L"马赛克",L"魔棒抠图",L"颜色",L"撤销",L"GIF",L"保存",L"复制",L"取消"};
-constexpr int TOOLBAR_WIDTH=616;
+constexpr uint32_t DEFAULT_INK=0xFF535D;
+constexpr int ID_WAND_GRADIENT=208,ID_MOSAIC_BLOCK=212;
+constexpr int SMART_TOOL=12,ID_SMART_BOX=220,ID_SMART_KEEP=221,ID_SMART_REMOVE=222,
+    ID_SMART_REFINE=223,ID_SMART_ORIGINAL=224,ID_SMART_APPLY=225,ID_SMART_RESET=226;
+constexpr int ID_TEXT_CONTENT=1001,ID_TEXT_SIZE=1004,ID_TEXT_COLOR=1005;
+constexpr std::array<const wchar_t*,13> TOOL_LABELS={L"矩形",L"箭头",L"画笔",L"文字",L"马赛克",L"魔棒抠图",L"颜色…",L"撤销",L"GIF",L"保存",L"复制",L"取消",L"智能抠图"};
+constexpr int TOOLBAR_WIDTH=696;
 constexpr std::array<ps::Tool,5> TOOLS={ps::Tool::Rectangle,ps::Tool::Arrow,ps::Tool::Pen,ps::Tool::Text,ps::Tool::Mosaic};
 int width(RECT r) {return static_cast<int>(r.right-r.left);}
 int height(RECT r) {return static_cast<int>(r.bottom-r.top);}
 bool contains(RECT r,POINT p) {return PtInRect(&r,p)!=FALSE;}
+RECT sizeLabel(RECT frame) {
+    const LONG y=std::max<LONG>(3,frame.top-31);
+    return {frame.left,y,frame.left+210,y+25};
+}
+
+struct CaptureTargets {
+    std::vector<RECT> windows,monitors;
+    RECT at(POINT p) const {
+        for(const auto& window:windows)if(contains(window,p))return window;
+        for(const auto& monitor:monitors)if(contains(monitor,p))return monitor;
+        return {};
+    }
+};
+struct TargetCollector {
+    RECT desktop;
+    CaptureTargets& targets;
+    HWND shell=GetShellWindow();
+
+    void add(std::vector<RECT>& list,const RECT& screenArea) const {
+        RECT area{};
+        if(!IntersectRect(&area,&screenArea,&desktop)||width(area)<4||height(area)<4)return;
+        OffsetRect(&area,-desktop.left,-desktop.top);
+        list.push_back(area);
+    }
+    static BOOL CALLBACK window(HWND handle,LPARAM context) {
+        const auto& self=*reinterpret_cast<TargetCollector*>(context);
+        if(handle==self.shell||!IsWindowVisible(handle)||IsIconic(handle))return TRUE;
+        DWORD cloaked=0;
+        if(SUCCEEDED(DwmGetWindowAttribute(handle,DWMWA_CLOAKED,&cloaked,sizeof(cloaked)))&&cloaked)return TRUE;
+        wchar_t windowClass[96]{};
+        GetClassNameW(handle,windowClass,static_cast<int>(std::size(windowClass)));
+        const std::wstring_view name=windowClass;
+        if(name==L"Progman"||name==L"WorkerW"||name==L"Shell_TrayWnd"||name==L"Shell_SecondaryTrayWnd"||
+           name==L"tooltips_class32"||name==L"SysShadow")return TRUE;
+        const auto style=GetWindowLongPtrW(handle,GWL_EXSTYLE);
+        if((style&WS_EX_LAYERED)&&(style&WS_EX_TRANSPARENT))return TRUE;
+        RECT area{};
+        if((FAILED(DwmGetWindowAttribute(handle,DWMWA_EXTENDED_FRAME_BOUNDS,&area,sizeof(area)))||IsRectEmpty(&area))&&
+           !GetWindowRect(handle,&area))return TRUE;
+        try {self.add(self.targets.windows,area);}
+        catch(const std::bad_alloc&) {return FALSE;}
+        return TRUE;
+    }
+    static BOOL CALLBACK monitor(HMONITOR,HDC,LPRECT area,LPARAM context) {
+        const auto& self=*reinterpret_cast<TargetCollector*>(context);
+        try {self.add(self.targets.monitors,*area);}
+        catch(const std::bad_alloc&) {return FALSE;}
+        return TRUE;
+    }
+    static CaptureTargets collect(RECT desktop) {
+        CaptureTargets targets;
+        TargetCollector collector{desktop,targets};
+        const auto context=reinterpret_cast<LPARAM>(&collector);
+        // Sample z-order before showing the overlay. Reuse the same frame
+        // bounds while the corresponding desktop image is frozen.
+        EnumWindows(window,context);
+        EnumDisplayMonitors(nullptr,nullptr,monitor,context);
+        return targets;
+    }
+};
+COLORREF colorRef(uint32_t color) {return RGB((color>>16)&255,(color>>8)&255,color&255);}
+void chooseColor(HWND owner,uint32_t& color,std::array<COLORREF,16>& palette) {
+    CHOOSECOLORW dialog{};
+    dialog.lStructSize=sizeof(dialog);
+    dialog.hwndOwner=owner;
+    dialog.rgbResult=colorRef(color);
+    dialog.lpCustColors=palette.data();
+    dialog.Flags=CC_RGBINIT|CC_FULLOPEN;
+    if(ChooseColorW(&dialog))
+        color=(static_cast<uint32_t>(GetRValue(dialog.rgbResult))<<16)|
+              (static_cast<uint32_t>(GetGValue(dialog.rgbResult))<<8)|GetBValue(dialog.rgbResult);
+}
 void fill(HDC dc,RECT r,COLORREF color) {HBRUSH b=CreateSolidBrush(color);FillRect(dc,&r,b);DeleteObject(b);}
 void text(HDC dc,const std::wstring& value,RECT r,int size,COLORREF color,bool bold=false,UINT flags=DT_LEFT|DT_VCENTER|DT_SINGLELINE) {
     NONCLIENTMETRICSW metrics{};metrics.cbSize=sizeof(metrics);
@@ -71,7 +150,8 @@ std::wstring hotkeyText(WORD key) {
 }
 
 enum class State {Idle,Preparing,Selecting,Editing,Recording,Finalizing};
-enum class Drag {None,Select,Move,Resize,Draw,Magic};
+enum class Drag {None,Select,Move,Resize,Draw,Magic,SmartBox,SmartBrush};
+enum class SmartTool {Box,Keep,Remove};
 struct App {
     HINSTANCE instance=nullptr;
     HWND main=nullptr,overlay=nullptr,toolbar=nullptr,recordBar=nullptr;
@@ -82,23 +162,44 @@ struct App {
     std::wstring status=L"准备好了。按快捷键，或点击下面的按钮。";
     State state=State::Idle;
     Drag drag=Drag::None;
-    RECT desktop{},selection{},dragRect{};
+    RECT desktop{},selection{},dragRect{},hoverTarget{},pressedTarget{};
+    CaptureTargets captureTargets;
+    bool regionDragged=false;
     POINT anchor{};
-    int resizeEdges=0,color=0;
+    int resizeEdges=0,textSize=22,mosaicBlock=12;
+    uint32_t ink=DEFAULT_INK;
+    std::array<COLORREF,16> customColors{
+        colorRef(DEFAULT_INK),colorRef(0xFFD166),colorRef(0x36D1DC),colorRef(0xFFFFFF),
+        colorRef(0x000000),colorRef(0x3478F6),colorRef(0x29A36A),colorRef(0x9657D5),
+        colorRef(0xF28332),colorRef(0xEB448F),colorRef(0x334155),colorRef(0x94A3B8),
+        colorRef(0x893737),colorRef(0x425E31),colorRef(0x305678),colorRef(0x825127)
+    };
     bool gifSelection=false,homeWasVisible=false,hasActive=false,exiting=false,hideOnCapture=true;
     bool captureHidesHome=false,restoreTransitions=false;
     BOOL previousTransitions=FALSE;
     ps::Tool tool=ps::Tool::None;
     ps::Bitmap screenshot,shade,base,rendered,preview;
     struct CanvasAnnotation {ps::Annotation value;RECT bounds;};
+    struct AnnotationUndo {size_t index;std::optional<CanvasAnnotation> previous;};
     std::vector<CanvasAnnotation> annotations;
+    std::vector<AnnotationUndo> annotationHistory;
     ps::Annotation active;
+    std::unique_ptr<ps::PenCoverage> penStroke;
+    ps::Bitmap penPreview;
+    ULONGLONG lastPenPaint=0;
     ps::Recorder recorder;
     NOTIFYICONDATAW tray{};
-    std::array<HWND,12> toolButtons{};
-    std::array<HWND,8> wandButtons{};
-    HWND toleranceSlider=nullptr,brushSlider=nullptr;
-    bool wandMode=false,contiguous=true,soften=true,wandUpdatePending=false,frameAdjust=false;
+    std::array<HWND,TOOL_LABELS.size()> toolButtons{};
+    std::array<HWND,7> smartButtons{};
+    bool smartMode=false,smartRefine=true,smartOriginal=false;
+    SmartTool smartTool=SmartTool::Box;
+    RECT smartSubject{},smartBox{};
+    std::vector<ps::CutoutStroke> smartStrokes;
+    ps::CutoutStroke smartStroke{};
+    ps::SelectionMask smartOpacity;
+    std::array<HWND,9> wandButtons{};
+    HWND toleranceSlider=nullptr,brushSlider=nullptr,mosaicSlider=nullptr;
+    bool wandMode=false,contiguous=true,followGradient=false,soften=true,wandUpdatePending=false,frameAdjust=false;
     int tolerance=18;
     ps::SelectionMask magicMask;
     size_t selectedPixels=0;
@@ -110,7 +211,10 @@ struct App {
     bool brushHover=false,brushTracking=false,strokeSubtract=false,strokeOwnsAction=false,strokeReplace=false;
     size_t strokeBeforeCount=0;
     std::unique_ptr<ps::SimilarSelection> strokeSelector;
-    std::wstring dialogText;
+    struct TextDialogState {
+        ps::Annotation& annotation;
+        std::array<COLORREF,16>& palette;
+    };
 
     static App& from(HWND window) {return *reinterpret_cast<App*>(GetWindowLongPtrW(window,GWLP_USERDATA));}
     static bool bind(HWND window,UINT message,LPARAM parameter) {
@@ -166,19 +270,54 @@ struct App {
         }
         if(message==WM_COMMAND&&LOWORD(w)==IDCANCEL) {EndDialog(dialog,IDCANCEL);return TRUE;}return FALSE;
     }
+    static void updateTextColorLabel(HWND dialog,uint32_t color) {
+        wchar_t label[40]{};
+        swprintf(label,40,L"颜色 #%06X…",static_cast<unsigned>(color));
+        SetDlgItemTextW(dialog,ID_TEXT_COLOR,label);
+    }
     static INT_PTR CALLBACK textDialog(HWND dialog,UINT message,WPARAM w,LPARAM l) {
         if(message==WM_INITDIALOG) {
-            SetWindowLongPtrW(dialog,DWLP_USER,l);SendDlgItemMessageW(dialog,1001,EM_SETLIMITTEXT,2000,0);
-            SetFocus(GetDlgItem(dialog,1001));return FALSE;
+            SetWindowLongPtrW(dialog,DWLP_USER,l);
+            auto& state=*reinterpret_cast<TextDialogState*>(l);
+            SendDlgItemMessageW(dialog,ID_TEXT_CONTENT,EM_SETLIMITTEXT,2000,0);
+            SetDlgItemTextW(dialog,ID_TEXT_CONTENT,state.annotation.text.c_str());
+            SetDlgItemInt(dialog,ID_TEXT_SIZE,state.annotation.textSize,FALSE);
+            updateTextColorLabel(dialog,state.annotation.color);
+            if(!state.annotation.text.empty())SetWindowTextW(dialog,L"轻透截图 · 编辑文字");
+            SetFocus(GetDlgItem(dialog,ID_TEXT_CONTENT));
+            return FALSE;
         }
-        if(message==WM_COMMAND&&LOWORD(w)==IDOK) {
-            auto& app=*reinterpret_cast<App*>(GetWindowLongPtrW(dialog,DWLP_USER));
-            int length=GetWindowTextLengthW(GetDlgItem(dialog,1001));
+        if(message!=WM_COMMAND)return FALSE;
+        auto& state=*reinterpret_cast<TextDialogState*>(GetWindowLongPtrW(dialog,DWLP_USER));
+        if(LOWORD(w)==ID_TEXT_COLOR){
+            chooseColor(dialog,state.annotation.color,state.palette);
+            updateTextColorLabel(dialog,state.annotation.color);
+            return TRUE;
+        }
+        if(LOWORD(w)==IDOK) {
+            BOOL valid=FALSE;
+            const UINT size=GetDlgItemInt(dialog,ID_TEXT_SIZE,&valid,FALSE);
+            if(!valid||size<ps::MinTextSize||size>ps::MaxTextSize) {
+                MessageBoxW(dialog,L"请输入 8–144 之间的整数字号。",L"字号（像素）",MB_OK|MB_ICONINFORMATION);
+                SetFocus(GetDlgItem(dialog,ID_TEXT_SIZE));
+                SendDlgItemMessageW(dialog,ID_TEXT_SIZE,EM_SETSEL,0,-1);
+                return TRUE;
+            }
+            const int length=GetWindowTextLengthW(GetDlgItem(dialog,ID_TEXT_CONTENT));
             std::wstring value(static_cast<size_t>(length)+1,L'\0');
-            GetDlgItemTextW(dialog,1001,value.data(),length+1);value.resize(length);app.dialogText=value;
-            EndDialog(dialog,IDOK);return TRUE;
+            GetDlgItemTextW(dialog,ID_TEXT_CONTENT,value.data(),length+1);
+            value.resize(length);
+            if(value.find_first_not_of(L" \t\r\n")==std::wstring::npos) {
+                SetFocus(GetDlgItem(dialog,ID_TEXT_CONTENT));
+                return TRUE;
+            }
+            state.annotation.textSize=static_cast<int>(size);
+            state.annotation.text=std::move(value);
+            EndDialog(dialog,IDOK);
+            return TRUE;
         }
-        if(message==WM_COMMAND&&LOWORD(w)==IDCANCEL){EndDialog(dialog,IDCANCEL);return TRUE;}return FALSE;
+        if(LOWORD(w)==IDCANCEL){EndDialog(dialog,IDCANCEL);return TRUE;}
+        return FALSE;
     }
     void layoutHome() {
         const int s=scale(28),gap=scale(12),y=scale(125),buttonWidth=scale(250);
@@ -224,12 +363,17 @@ struct App {
         const bool homeButton=GetParent(item.hwndItem)==main;
         COLORREF background=colors.surface;
         bool selected=false;
-        if(item.CtlID>=100&&item.CtlID<112) {
+        if(item.CtlID>=100&&item.CtlID<100+TOOL_LABELS.size()) {
             int index=item.CtlID-100;
-            selected=(index<5&&!wandMode&&tool==TOOLS[index])||(index==5&&wandMode);
+            selected=(index<5&&!wandMode&&!smartMode&&tool==TOOLS[index])||(index==5&&wandMode)||(index==SMART_TOOL&&smartMode);
             background=selected?colors.selected:colors.surface;
         }
-        if((item.CtlID==200&&contiguous)||(item.CtlID==201&&soften)||(item.CtlID==206&&frameAdjust))selected=true;
+        if((item.CtlID==200&&contiguous)||(item.CtlID==201&&soften)||(item.CtlID==206&&frameAdjust)||
+           (item.CtlID==ID_WAND_GRADIENT&&contiguous&&followGradient))selected=true;
+        if((item.CtlID==ID_SMART_BOX&&smartTool==SmartTool::Box)||
+           (item.CtlID==ID_SMART_KEEP&&smartTool==SmartTool::Keep)||
+           (item.CtlID==ID_SMART_REMOVE&&smartTool==SmartTool::Remove)||
+           (item.CtlID==ID_SMART_REFINE&&smartRefine)||(item.CtlID==ID_SMART_ORIGINAL&&smartOriginal))selected=true;
         if(selected)background=colors.selected;
         if(item.itemState&ODS_SELECTED)background=colors.hover;
         fill(item.hDC,item.rcItem,background);
@@ -243,12 +387,12 @@ struct App {
             text(item.hDC,hotkeyText(gif?gifKey:pngKey),r,scale(13),colors.muted);
         } else {
             wchar_t label[100]{};GetWindowTextW(item.hwndItem,label,100);
-            const bool accent=item.CtlID==108||item.CtlID==110||item.CtlID==ID_STOP||item.CtlID==202||item.CtlID==203||item.CtlID==207;
+            const bool accent=item.CtlID==108||item.CtlID==110||item.CtlID==ID_STOP||item.CtlID==202||item.CtlID==203||item.CtlID==207||item.CtlID==ID_SMART_APPLY;
             const COLORREF ink=(item.itemState&ODS_DISABLED)?colors.muted:(selected&&!(item.itemState&ODS_SELECTED))?colors.selectedText:colors.text;
             text(item.hDC,label,r,homeButton?scale(13):14,ink,accent,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
             if(item.CtlID==106) {
-                RECT line{r.left+12,r.bottom-5,r.right-12,r.bottom-2};uint32_t c=COLORS[color];
-                fill(item.hDC,line,RGB((c>>16)&255,(c>>8)&255,c&255));
+                RECT line{r.left+12,r.bottom-7,r.right-12,r.bottom-2};
+                fill(item.hDC,line,colorRef(ink));outline(item.hDC,line,colors.border);
             }
         }
         if(item.itemState&ODS_FOCUS) {RECT r2=item.rcItem;InflateRect(&r2,-2,-2);outline(item.hDC,r2,colors.focus);}
@@ -282,11 +426,14 @@ struct App {
         if(captureHidesHome)ShowWindow(main,SW_HIDE);
         DwmFlush();
         desktop=ps::desktopRect();
+        captureTargets=gifSelection?CaptureTargets{}:TargetCollector::collect(desktop);
         screenshot=ps::capture(desktop);shade=ps::dimmed(screenshot);
         restoreCaptureTransitions();
-        selection={};annotations.clear();base={};rendered={};preview={};tool=ps::Tool::None;drag=Drag::None;
-        wandMode=false;frameAdjust=false;clearMagicSelection();
+        selection={};clearAnnotations();base={};rendered={};preview={};tool=ps::Tool::None;drag=Drag::None;
+        wandMode=false;smartMode=false;frameAdjust=false;clearMagicSelection();resetSmartCutout();
         state=State::Selecting;
+        hoverTarget=pressedTarget={};regionDragged=false;
+        refreshCaptureHover();
         overlay=CreateWindowExW(WS_EX_TOPMOST|WS_EX_TOOLWINDOW,L"QingTou.Overlay",L"轻透截图 · 框选",WS_POPUP,
             desktop.left,desktop.top,width(desktop),height(desktop),main,nullptr,instance,this);
         if(!overlay)throw std::runtime_error("Cannot create selection window");
@@ -296,9 +443,12 @@ struct App {
         KillTimer(main,TIMER_CAPTURE);restoreCaptureTransitions();
         drag=Drag::None;if(overlay&&GetCapture()==overlay)ReleaseCapture();
         if(toolbar) {DestroyWindow(toolbar);toolbar=nullptr;}if(overlay) {DestroyWindow(overlay);overlay=nullptr;}
-        toleranceSlider=brushSlider=nullptr;wandButtons.fill(nullptr);toolButtons.fill(nullptr);
-        screenshot={};shade={};base={};rendered={};preview={};annotations.clear();hasActive=false;drag=Drag::None;
-        clearMagicSelection();wandMode=false;frameAdjust=false;brushHover=false;brushTracking=false;brushWheel=0;
+        toleranceSlider=brushSlider=mosaicSlider=nullptr;wandButtons.fill(nullptr);smartButtons.fill(nullptr);toolButtons.fill(nullptr);
+        screenshot={};shade={};base={};rendered={};preview={};clearAnnotations();hasActive=false;drag=Drag::None;
+        penStroke.reset();penPreview={};
+        captureTargets={};hoverTarget=pressedTarget={};regionDragged=false;
+        clearMagicSelection();resetSmartCutout();wandMode=smartMode=false;
+        frameAdjust=false;brushHover=false;brushTracking=false;brushWheel=0;
     }
     void cancelSelection() {
         releaseSelection();state=State::Idle;if(homeWasVisible)showMain();
@@ -322,11 +472,58 @@ struct App {
         rendered=ps::annotate(base,items);
         if(!wandSeeds.empty())recomputeMagicSelection();else refreshPreview();
     }
-    void addAnnotation(ps::Annotation item) {annotations.push_back({std::move(item),selection});}
+    void clearAnnotations() {
+        annotations.clear();annotationHistory.clear();
+    }
+    void addAnnotation(ps::Annotation item) {
+        annotations.push_back({std::move(item),selection});
+        try {
+            annotationHistory.push_back({annotations.size()-1,std::nullopt});
+        } catch(...) {
+            annotations.pop_back();throw;
+        }
+    }
+    void editText(POINT point) {
+        size_t index=annotations.size();
+        ps::Annotation item;
+        item.tool=ps::Tool::Text;item.points={point};item.textSize=textSize;item.color=ink;
+        if(!(GetKeyState(VK_CONTROL)&0x8000)) {
+            for(size_t i=annotations.size();i>0;--i) {
+                const auto& stored=annotations[i-1];
+                if(stored.value.tool!=ps::Tool::Text)continue;
+                POINT origin=stored.value.points.front();
+                origin.x+=stored.bounds.left-selection.left;
+                origin.y+=stored.bounds.top-selection.top;
+                if(!contains(ps::textAnnotationBounds(stored.value,origin,base.width,base.height),point))continue;
+                index=i-1;item=stored.value;break;
+            }
+        }
+        TextDialogState options{item,customColors};
+        const auto result=DialogBoxParamW(instance,MAKEINTRESOURCEW(101),overlay,textDialog,reinterpret_cast<LPARAM>(&options));
+        if(result==-1)throw std::runtime_error("Cannot open text annotation dialog");
+        if(result==IDOK) {
+            if(index==annotations.size()) {
+                textSize=item.textSize;ink=item.color;
+                addAnnotation(std::move(item));
+                if(toolButtons[6])InvalidateRect(toolButtons[6],nullptr,FALSE);
+                refreshDrawing();
+            } else {
+                auto& original=annotations[index];
+                if(item.text!=original.value.text||item.textSize!=original.value.textSize||item.color!=original.value.color) {
+                    annotationHistory.push_back({index,original});
+                    original.value=std::move(item);
+                    refreshDrawing();
+                }
+            }
+        }
+        SetFocus(overlay);
+    }
     void refreshPreview() {
         if(rendered.empty())return;
-        if(!wandMode)hideBrushCursor();
-        preview=ps::transparencyPreview(rendered,magicMask);
+        if(!wandMode&&!smartMode)hideBrushCursor();
+        if(smartMode&&!smartOriginal&&drag!=Drag::SmartBox)
+            preview=ps::transparencyPreview(rendered,{},smartOpacity);
+        else preview=ps::transparencyPreview(rendered,magicMask);
         updateTightButton();
         if(overlay)InvalidateRect(overlay,nullptr,FALSE);
         if(toolbar)InvalidateRect(toolbar,nullptr,FALSE);
@@ -357,7 +554,7 @@ struct App {
             auto localMask=ps::reframeMask(accumulated,canvas,seed.bounds);
             if(seed.mode==2)ps::invertSelection(localMask,*seed.source);
             else {
-                ps::SimilarSelection selector(*seed.source,tolerance,contiguous);
+                ps::SimilarSelection selector(*seed.source,tolerance,contiguous,followGradient);
                 selector.select(localMask,seed.point,seed.mode==1);
                 for(size_t i=1;i<seed.path.size();++i)
                     selector.brush(localMask,seed.path[i-1],seed.path[i],seed.radius,seed.mode==1);
@@ -377,7 +574,7 @@ struct App {
         const bool append=wandSeeds.empty()||wandSeeds.back().source!=wandReference||!wandSeeds.back().path.empty()||wandSeeds.back().mode!=mode||wandSeeds.back().point.x!=seed.x||wandSeeds.back().point.y!=seed.y;
         if(append) {
             wandSeeds.push_back({seed,mode,{},0,wandReference,selection});
-            ps::SimilarSelection selector(*wandReference,tolerance,contiguous);
+            ps::SimilarSelection selector(*wandReference,tolerance,contiguous,followGradient);
             selector.select(magicMask,seed,subtract);
             selectedPixels=static_cast<size_t>(std::count_if(magicMask.begin(),magicMask.end(),[](uint8_t value){return value!=0;}));
             refreshPreview();
@@ -400,7 +597,7 @@ struct App {
         auto& action=wandSeeds.back();
         if(action.path.empty()){action.path.push_back(strokeStart);action.radius=strokeRadius;}
         action.path.push_back(next);
-        if(!strokeSelector)strokeSelector=std::make_unique<ps::SimilarSelection>(rendered,tolerance,contiguous);
+        if(!strokeSelector)strokeSelector=std::make_unique<ps::SimilarSelection>(rendered,tolerance,contiguous,followGradient);
         const auto changed=strokeSelector->brush(magicMask,strokeLast,next,strokeRadius,strokeSubtract);
         strokeLast=next;
         if(changed.pixels) {
@@ -424,7 +621,9 @@ struct App {
     void hideBrushCursor() {invalidateBrushCursor();brushHover=false;}
     void updateBrushCursor(POINT p) {
         invalidateBrushCursor();brushCursor=p;
-        brushHover=state==State::Editing&&wandMode&&!frameAdjust&&drag!=Drag::Resize&&drag!=Drag::Move&&edgesAt(p)==0&&contains(selection,p);
+        const bool drawWand=wandMode&&!frameAdjust&&drag!=Drag::Resize&&drag!=Drag::Move&&edgesAt(p)==0;
+        const bool drawSmart=smartMode&&smartTool!=SmartTool::Box&&!IsRectEmpty(&smartSubject);
+        brushHover=state==State::Editing&&(drawWand||drawSmart)&&contains(selection,p);
         if(overlay)SetCursor(cursorForPoint(p));
         if(brushHover&&overlay&&!brushTracking) {
             TRACKMOUSEEVENT tracking{sizeof(tracking),TME_LEAVE,overlay,0};brushTracking=TrackMouseEvent(&tracking)!=FALSE;
@@ -432,14 +631,14 @@ struct App {
         invalidateBrushCursor();
     }
     void setBrushRadius(int radius) {
-        if(drag==Drag::Magic)return;
+        if(drag==Drag::Magic||drag==Drag::SmartBrush)return;
         invalidateBrushCursor();brushRadius=std::clamp(radius,1,64);invalidateBrushCursor();
         if(brushSlider)SendMessageW(brushSlider,TBM_SETPOS,TRUE,brushRadius);
         if(toolbar)InvalidateRect(toolbar,nullptr,FALSE);
     }
     void adjustBrush(int delta) {setBrushRadius(brushRadius+delta);}
     void paintBrushCursor(HDC dc) {
-        if(!wandMode||!brushHover||state!=State::Editing)return;
+        if((!wandMode&&!smartMode)||!brushHover||state!=State::Editing)return;
         const int saved=SaveDC(dc);IntersectClipRect(dc,selection.left,selection.top,selection.right,selection.bottom);
         HGDIOBJ oldBrush=SelectObject(dc,GetStockObject(HOLLOW_BRUSH));
         const int x=brushCursor.x,y=brushCursor.y,r=brushRadius;
@@ -447,7 +646,9 @@ struct App {
         HGDIOBJ oldPen=SelectObject(dc,dark);Ellipse(dc,x-r,y-r,x+r+1,y+r+1);
         SelectObject(dc,light);Ellipse(dc,x-r,y-r,x+r+1,y+r+1);
         MoveToEx(dc,x-2,y,nullptr);LineTo(dc,x+3,y);
-        if(!(drag==Drag::Magic?strokeSubtract:(GetKeyState(VK_MENU)&0x8000)!=0)){MoveToEx(dc,x,y-2,nullptr);LineTo(dc,x,y+3);}
+        const bool subtract=smartMode?smartTool==SmartTool::Remove:
+            drag==Drag::Magic?strokeSubtract:(GetKeyState(VK_MENU)&0x8000)!=0;
+        if(!subtract){MoveToEx(dc,x,y-2,nullptr);LineTo(dc,x,y+3);}
         SelectObject(dc,oldPen);SelectObject(dc,oldBrush);DeleteObject(dark);DeleteObject(light);RestoreDC(dc,saved);
     }
     void applyCutout(bool keep) {
@@ -460,10 +661,100 @@ struct App {
         operation.outsideOpacity=keep?0:255;
         addAnnotation(std::move(operation));clearMagicSelection();refreshDrawing();
     }
+    void resetSmartCutout() {
+        smartSubject=smartBox={};smartOpacity.clear();smartStrokes.clear();
+        smartStroke={};smartTool=SmartTool::Box;smartOriginal=false;
+    }
+    void updateSmartButtons() {
+        if(!smartButtons[0])return;
+        const bool hasSubject=!IsRectEmpty(&smartSubject);
+        for(int i=1;i<=2;++i)EnableWindow(smartButtons[i],hasSubject);
+        EnableWindow(smartButtons[3],hasSubject);
+        EnableWindow(smartButtons[4],!smartOpacity.empty());
+        EnableWindow(smartButtons[5],!smartOpacity.empty());
+        EnableWindow(smartButtons[6],hasSubject);
+        SetWindowTextW(smartButtons[3],smartRefine?L"边缘精修 ✓":L"边缘精修");
+        SetWindowTextW(smartButtons[4],smartOriginal?L"看抠图":L"看原图");
+        for(auto button:smartButtons)InvalidateRect(button,nullptr,FALSE);
+    }
+    void recomputeSmartCutout() {
+        if(!IsRectEmpty(&smartSubject))
+            smartOpacity=ps::smartCutout(rendered,smartSubject,smartStrokes,smartRefine);
+        else smartOpacity.clear();
+        updateSmartButtons();
+        refreshPreview();
+    }
+    void applySmartCutout() {
+        if(smartOpacity.empty())return;
+        ps::Annotation operation;operation.tool=ps::Tool::Cutout;operation.outsideOpacity=0;
+        operation.opacity=std::move(smartOpacity);
+        addAnnotation(std::move(operation));
+        resetSmartCutout();smartMode=false;
+        refreshDrawing();
+        if(overlay)showToolbar();
+    }
+    void finishSmartGesture() {
+        const Drag gesture=drag;
+        if(gesture!=Drag::SmartBox&&gesture!=Drag::SmartBrush)return;
+        drag=Drag::None;
+        if(overlay&&GetCapture()==overlay)ReleaseCapture();
+        if(gesture==Drag::SmartBrush)smartStrokes.push_back(std::move(smartStroke));
+        else {
+            const RECT next=smartBox;
+            smartBox={};
+            if(width(next)<4||height(next)<4){refreshPreview();return;}
+            smartSubject=next;smartStrokes.clear();smartOriginal=false;smartTool=SmartTool::Keep;
+        }
+        if(overlay)SetCursor(LoadCursorW(nullptr,IDC_WAIT));
+        recomputeSmartCutout();
+        if(overlay)SetCursor(cursorForPoint(brushCursor));
+    }
+    void smartAction(int id) {
+        if(!smartMode)return;
+        finishSmartGesture();
+        if(id==ID_SMART_BOX)smartTool=SmartTool::Box;
+        else if(id==ID_SMART_KEEP)smartTool=SmartTool::Keep;
+        else if(id==ID_SMART_REMOVE)smartTool=SmartTool::Remove;
+        else if(id==ID_SMART_REFINE){smartRefine=!smartRefine;recomputeSmartCutout();}
+        else if(id==ID_SMART_ORIGINAL){smartOriginal=!smartOriginal;refreshPreview();}
+        else if(id==ID_SMART_APPLY)applySmartCutout();
+        else if(id==ID_SMART_RESET){resetSmartCutout();refreshPreview();}
+        updateSmartButtons();
+        if(toolbar)InvalidateRect(toolbar,nullptr,FALSE);
+        if(overlay){updateBrushCursor(brushCursor);SetFocus(overlay);}
+    }
+    void drawSmartGuide(HDC dc) {
+        if(drag!=Drag::SmartBox&&drag!=Drag::SmartBrush)return;
+        const int saved=SaveDC(dc);
+        IntersectClipRect(dc,selection.left,selection.top,selection.right,selection.bottom);
+        if(drag==Drag::SmartBox) {
+            RECT guide=smartBox;
+            OffsetRect(&guide,selection.left,selection.top);
+            outline(dc,guide,colors.focus,2);
+        } else if(!smartStroke.points.empty()) {
+            const COLORREF color=smartStroke.keep?RGB(29,205,92):RGB(245,76,65);
+            const int radius=smartStroke.radius;
+            HPEN pen=CreatePen(PS_SOLID,radius*2,color);
+            const auto old=SelectObject(dc,pen);
+            const LONG x=selection.left,y=selection.top;
+            const auto first=smartStroke.points.front();
+            fill(dc,{x+first.x-radius,y+first.y-radius,x+first.x+radius,y+first.y+radius},color);
+            MoveToEx(dc,x+first.x,y+first.y,nullptr);
+            for(size_t i=1;i<smartStroke.points.size();++i)
+                LineTo(dc,x+smartStroke.points[i].x,y+smartStroke.points[i].y);
+            SelectObject(dc,old);DeleteObject(pen);
+        }
+        RestoreDC(dc,saved);
+    }
     void wandAction(int id) {
         finishFrameDrag();
         finishMagicStroke();
-        if(id==200){contiguous=!contiguous;SetWindowTextW(wandButtons[0],contiguous?L"连续区域":L"全图相似");recomputeMagicSelection();}
+        if(id==200){
+            contiguous=!contiguous;
+            SetWindowTextW(wandButtons[0],contiguous?L"连续区域":L"全图相似");
+            EnableWindow(wandButtons[8],contiguous);
+            recomputeMagicSelection();
+        }
         if(id==201){soften=!soften;SetWindowTextW(wandButtons[1],soften?L"柔边 ✓":L"柔边");}
         if(id==202)applyCutout(false);
         if(id==203)applyCutout(true);
@@ -471,11 +762,16 @@ struct App {
         if(id==205){clearMagicSelection();refreshPreview();}
         if(id==206){frameAdjust=!frameAdjust;hideBrushCursor();SetWindowTextW(wandButtons[6],frameAdjust?L"完成调整":L"调整截取框");if(overlay)InvalidateRect(overlay,nullptr,FALSE);}
         if(id==207)tightenFrame();
+        if(id==ID_WAND_GRADIENT&&contiguous){
+            followGradient=!followGradient;
+            SetWindowTextW(wandButtons[8],followGradient?L"跟随渐变 ✓":L"跟随渐变");
+            recomputeMagicSelection();
+        }
         for(auto button:wandButtons)if(button)InvalidateRect(button,nullptr,FALSE);
         if(overlay)SetFocus(overlay);
     }
     int edgesAt(POINT p)const {
-        if(state!=State::Editing||tool!=ps::Tool::None||drag==Drag::Magic)return 0;
+        if(state!=State::Editing||tool!=ps::Tool::None||smartMode||drag==Drag::Magic)return 0;
         RECT expanded=selection;InflateRect(&expanded,7,7);if(!contains(expanded,p))return 0;
         int edges=0;
         const LONG left=std::abs(p.x-selection.left),right=std::abs(p.x-selection.right);
@@ -501,7 +797,7 @@ struct App {
         return selectedPixels?ps::contentBounds(rendered,magicMask):ps::contentBounds(rendered);
     }
     void updateTightButton() {
-        if(!wandButtons[7])return;
+        if(!wandMode||!wandButtons[7])return;
         const RECT bounds=tightBounds();
         const bool tighter=!IsRectEmpty(&bounds)&&(bounds.left||bounds.top||bounds.right!=rendered.width||bounds.bottom!=rendered.height);
         EnableWindow(wandButtons[7],tighter);
@@ -524,8 +820,44 @@ struct App {
         if(width(selection)<4||height(selection)<4)selection=dragRect;
         changeFrame(selection);
     }
+    void invalidateCaptureFrame(RECT area) {
+        if(!overlay||IsRectEmpty(&area))return;
+        const RECT label=sizeLabel(area);
+        InflateRect(&area,2,2);
+        InvalidateRect(overlay,&area,FALSE);
+        InvalidateRect(overlay,&label,FALSE);
+    }
+    void updateCaptureHover(POINT p) {
+        const RECT target=captureTargets.at(p);
+        if(EqualRect(&target,&hoverTarget))return;
+        invalidateCaptureFrame(hoverTarget);
+        hoverTarget=target;
+        invalidateCaptureFrame(hoverTarget);
+    }
+    void refreshCaptureHover() {
+        POINT cursor{};
+        if(GetCursorPos(&cursor))updateCaptureHover({cursor.x-desktop.left,cursor.y-desktop.top});
+    }
+    void abortRegionDrag() {
+        drag=Drag::None;selection=hoverTarget=pressedTarget={};regionDragged=false;
+        refreshCaptureHover();
+        if(overlay)InvalidateRect(overlay,nullptr,FALSE);
+    }
     void down(POINT p) {
         if(state!=State::Selecting&&state!=State::Editing)return;
+        if(state==State::Editing&&smartMode) {
+            if(!contains(selection,p))return;
+            anchor=local(p);
+            if(smartTool==SmartTool::Box||IsRectEmpty(&smartSubject)) {
+                drag=Drag::SmartBox;smartBox={anchor.x,anchor.y,anchor.x,anchor.y};
+                refreshPreview();
+            } else {
+                drag=Drag::SmartBrush;smartStroke={smartTool==SmartTool::Keep,brushRadius,{anchor}};
+                if(overlay)InvalidateRect(overlay,nullptr,FALSE);
+            }
+            if(overlay)SetCapture(overlay);
+            return;
+        }
         const int edges=edgesAt(p);
         if(state==State::Editing&&wandMode&&!frameAdjust&&!edges&&contains(selection,p)){
             beginMagicStroke(p,(GetKeyState(VK_MENU)&0x8000)!=0,(GetKeyState(VK_CONTROL)&0x8000)==0);
@@ -533,31 +865,89 @@ struct App {
             return;
         }
         if(state==State::Editing&&tool==ps::Tool::Text&&contains(selection,p)) {
-            dialogText.clear();
-            if(DialogBoxParamW(instance,MAKEINTRESOURCEW(101),overlay,textDialog,reinterpret_cast<LPARAM>(this))==IDOK&&!dialogText.empty()) {
-                ps::Annotation a;a.tool=tool;a.points.push_back(local(p));a.text=dialogText;a.color=COLORS[color];addAnnotation(std::move(a));refreshDrawing();
-            }
-            SetFocus(overlay);return;
+            editText(local(p));return;
         }
         anchor=p;dragRect=selection;
         resizeEdges=edges;
         if(resizeEdges)drag=Drag::Resize;
         else if(state==State::Editing&&contains(selection,p)&&tool!=ps::Tool::None) {
-            drag=Drag::Draw;active={};active.tool=tool;active.color=COLORS[color];active.points={local(p)};
-            if(tool!=ps::Tool::Pen)active.points.push_back(local(p));
+            drag=Drag::Draw;active={};active.tool=tool;active.color=ink;active.points={local(p)};
+            active.mosaicBlock=mosaicBlock;
+            if(tool==ps::Tool::Pen) {
+                penPreview=preview;
+                penStroke=std::make_unique<ps::PenCoverage>(preview.width,preview.height,active.thickness);
+                lastPenPaint=0;
+            } else active.points.push_back(local(p));
             hasActive=true;
         } else if(state==State::Editing&&contains(selection,p)&&(frameAdjust||annotations.empty()))drag=Drag::Move;
         else if(state==State::Editing&&contains(selection,p))return;
-        else {drag=Drag::Select;state=State::Selecting;selection={p.x,p.y,p.x,p.y};base={};rendered={};preview={};annotations.clear();tool=ps::Tool::None;clearMagicSelection();wandMode=false;frameAdjust=false;}
+        else {
+            pressedTarget=state==State::Selecting?captureTargets.at(p):RECT{};
+            hoverTarget=pressedTarget;regionDragged=false;
+            drag=Drag::Select;state=State::Selecting;selection={p.x,p.y,p.x,p.y};
+            base={};rendered={};preview={};clearAnnotations();tool=ps::Tool::None;
+            clearMagicSelection();wandMode=false;frameAdjust=false;
+            if(overlay)InvalidateRect(overlay,nullptr,FALSE);
+        }
         if(toolbar)ShowWindow(toolbar,SW_HIDE);
         if(overlay)SetCapture(overlay);
+        if(penStroke)updatePenPreview(active.points.front(),active.points.front());
+    }
+    void updatePenPreview(POINT from,POINT to) {
+        RECT dirty=penStroke->extend(from,to);
+        if(IsRectEmpty(&dirty))return;
+        penStroke->blend(penPreview.pixels.data(),static_cast<size_t>(penPreview.width)*4,
+            preview.pixels.data(),dirty,active.color);
+        if(!overlay)return;
+        OffsetRect(&dirty,selection.left,selection.top);
+        InvalidateRect(overlay,&dirty,FALSE);
+        // A busy stream of mouse messages can defer WM_PAINT. Bound the time
+        // until the next paint without forcing one for every input sample.
+        const ULONGLONG now=GetTickCount64();
+        if(now-lastPenPaint>=8){lastPenPaint=now;UpdateWindow(overlay);}
+    }
+    void finishDrawing() {
+        if(drag!=Drag::Draw)return;
+        drag=Drag::None;
+        if(overlay&&GetCapture()==overlay)ReleaseCapture();
+        if(hasActive)addAnnotation(std::move(active));
+        hasActive=false;penStroke.reset();penPreview={};
+        refreshDrawing();
+        if(overlay)showToolbar();
     }
     void move(POINT p) {
         updateBrushCursor(p);
-        if(drag==Drag::None)return;
+        if(drag==Drag::None) {
+            if(state==State::Selecting)updateCaptureHover(p);
+            return;
+        }
         if(drag==Drag::Magic){extendMagicStroke(p);return;}
-        if(drag==Drag::Select)selection=ps::normalized(anchor,p);
-        else if(drag==Drag::Move) {
+        if(drag==Drag::SmartBox) {
+            smartBox=ps::normalized(anchor,local(p));
+            ++smartBox.right;++smartBox.bottom;
+            if(overlay)InvalidateRect(overlay,nullptr,FALSE);
+            return;
+        }
+        if(drag==Drag::SmartBrush) {
+            const POINT next=local(p),previous=smartStroke.points.back();
+            if(next.x==previous.x&&next.y==previous.y)return;
+            smartStroke.points.push_back(next);
+            if(overlay) {
+                RECT dirty=ps::normalized(previous,next);
+                InflateRect(&dirty,smartStroke.radius+2,smartStroke.radius+2);
+                OffsetRect(&dirty,selection.left,selection.top);
+                InvalidateRect(overlay,&dirty,FALSE);
+            }
+            return;
+        }
+        if(drag==Drag::Select) {
+            if(!regionDragged&&!IsRectEmpty(&pressedTarget)&&
+               std::abs(p.x-anchor.x)<GetSystemMetrics(SM_CXDRAG)&&
+               std::abs(p.y-anchor.y)<GetSystemMetrics(SM_CYDRAG))return;
+            regionDragged=true;
+            hoverTarget={};
+            selection=ps::normalized(anchor,p);
+        } else if(drag==Drag::Move) {
             int dx=std::clamp<int>(p.x-anchor.x,-dragRect.left,width(desktop)-dragRect.right);
             int dy=std::clamp<int>(p.y-anchor.y,-dragRect.top,height(desktop)-dragRect.bottom);
             selection=dragRect;OffsetRect(&selection,dx,dy);
@@ -568,71 +958,107 @@ struct App {
             selection=ps::normalized({r.left,r.top},{r.right,r.bottom});
         } else if(drag==Drag::Draw) {
             POINT lp=local(p);
-            if(tool==ps::Tool::Pen) {
-                POINT previous=active.points.back();if(std::abs(lp.x-previous.x)+std::abs(lp.y-previous.y)>=2)active.points.push_back(lp);
-            } else active.points.back()=lp;
-            refreshDrawing();return;
+            if(penStroke) {
+                const POINT previous=active.points.back();
+                if(lp.x!=previous.x||lp.y!=previous.y) {
+                    active.points.push_back(lp);
+                    updatePenPreview(previous,lp);
+                }
+            } else {
+                active.points.back()=lp;
+                refreshDrawing();
+            }
+            return;
         }
         if(overlay)InvalidateRect(overlay,nullptr,FALSE);
     }
     void up(POINT p) {
         if(drag==Drag::None)return;
         if(drag==Drag::Magic){move(p);finishMagicStroke();return;}
+        if(drag==Drag::SmartBox||drag==Drag::SmartBrush){move(p);finishSmartGesture();return;}
         if(drag==Drag::Resize||drag==Drag::Move){move(p);finishFrameDrag();return;}
-        move(p);Drag previous=drag;drag=Drag::None;ReleaseCapture();
-        if(previous==Drag::Draw) {
-            if(hasActive)addAnnotation(std::move(active));
-            hasActive=false;refreshDrawing();
-        } else if(width(selection)>=4&&height(selection)>=4) {
-            state=State::Editing;base=ps::crop(screenshot,selection);rendered=base;refreshPreview();
-            if(gifSelection) {startRecording();return;}
-        } else {state=State::Selecting;selection={};return;}
-        showToolbar();InvalidateRect(overlay,nullptr,FALSE);
+        move(p);
+        if(drag==Drag::Draw){finishDrawing();return;}
+        if(!regionDragged)selection=pressedTarget;
+        drag=Drag::None;
+        if(overlay&&GetCapture()==overlay)ReleaseCapture();
+        if(width(selection)<4||height(selection)<4) {
+            abortRegionDrag();
+            updateCaptureHover(p);
+            return;
+        }
+        captureTargets={};hoverTarget=pressedTarget={};
+        state=State::Editing;base=ps::crop(screenshot,selection);rendered=base;refreshPreview();
+        if(gifSelection) {startRecording();return;}
+        if(overlay)showToolbar();
     }
-    void paintOverlay(HDC dc) {
-        ps::drawBitmap(dc,shade,0,0);
-        if(width(selection)>0&&height(selection)>0) {
+    void paintOverlay(HDC dc,RECT dirty) {
+        if(!penStroke||dirty.left<selection.left||dirty.top<selection.top||
+           dirty.right>selection.right||dirty.bottom>selection.bottom)
+            ps::drawBitmapRows(dc,shade,0,0,dirty);
+        const RECT frame=IsRectEmpty(&hoverTarget)?selection:hoverTarget;
+        if(!IsRectEmpty(&frame)) {
             if(drag==Drag::Resize||drag==Drag::Move) {
                 const int saved=SaveDC(dc);IntersectClipRect(dc,selection.left,selection.top,selection.right,selection.bottom);
                 ps::drawBitmap(dc,screenshot,0,0);ps::drawBitmap(dc,preview,dragRect.left,dragRect.top);RestoreDC(dc,saved);
             }
-            else if(state==State::Editing&&!preview.empty())ps::drawBitmap(dc,preview,selection.left,selection.top);
-            else {int saved=SaveDC(dc);IntersectClipRect(dc,selection.left,selection.top,selection.right,selection.bottom);ps::drawBitmap(dc,screenshot,0,0);RestoreDC(dc,saved);}
-            outline(dc,selection,colors.focus,2);
-            if(tool==ps::Tool::None) {
+            else if(state==State::Editing&&!preview.empty())
+                ps::drawBitmapRows(dc,penStroke?penPreview:preview,selection.left,selection.top,dirty);
+            else {
+                const int saved=SaveDC(dc);
+                IntersectClipRect(dc,frame.left,frame.top,frame.right,frame.bottom);
+                ps::drawBitmapRows(dc,screenshot,0,0,dirty);
+                RestoreDC(dc,saved);
+            }
+            outline(dc,frame,colors.focus,2);
+            if(state==State::Editing&&tool==ps::Tool::None&&!smartMode) {
                 for(int x:{static_cast<int>(selection.left),static_cast<int>((selection.left+selection.right)/2),static_cast<int>(selection.right)})
                     for(int y:{static_cast<int>(selection.top),static_cast<int>((selection.top+selection.bottom)/2),static_cast<int>(selection.bottom)}) {
                         if(x==(selection.left+selection.right)/2&&y==(selection.top+selection.bottom)/2)continue;
                         fill(dc,{x-3,y-3,x+4,y+4},colors.focus);
                     }
             }
-            const int labelY=std::max(3,static_cast<int>(selection.top)-31);
-            RECT label{selection.left,labelY,selection.left+210,labelY+25};
-            fill(dc,label,colors.background);label.left+=8;
-            text(dc,std::to_wstring(width(selection))+L" × "+std::to_wstring(height(selection))+L" px",label,13,colors.text);
+            RECT label=sizeLabel(frame);
+            RECT visibleLabel{};
+            if(IntersectRect(&visibleLabel,&label,&dirty)) {
+                fill(dc,label,colors.background);label.left+=8;
+                text(dc,std::to_wstring(width(frame))+L" × "+std::to_wstring(height(frame))+L" px",label,13,colors.text);
+            }
         }
         if(state==State::Selecting) {
             RECT label{std::max(10,width(desktop)/2-240),32,std::max(10,width(desktop)/2-240)+480,74};fill(dc,label,colors.background);
-            text(dc,gifSelection?L"拖动框选录制区域 · 松开后开始 · Esc 取消":L"拖动框选 · 标注后 Enter 复制 · Ctrl+S 保存 · Esc 取消",label,14,colors.text,false,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
+            text(dc,gifSelection?L"拖动框选录制区域 · 松开后开始 · Esc 取消":L"单击选中窗口 · 拖动自由框选 · Esc 取消",label,14,colors.text,false,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
         }
         paintBrushCursor(dc);
+        if(smartMode)drawSmartGuide(dc);
     }
     void paintToolbar(HDC dc) {
         RECT r{};GetClientRect(toolbar,&r);fill(dc,r,colors.surface);
+        if(tool==ps::Tool::Mosaic) {
+            text(dc,L"马赛克块大小 "+std::to_wstring(mosaicBlock)+L" px",{12,51,156,83},13,colors.text);
+            return;
+        }
+        if(smartMode) {
+            const std::wstring hint=IsRectEmpty(&smartSubject)?
+                L"拖框把主体完整圈住，尽量在框外留一些背景":
+                smartOpacity.empty()?L"请用保留画笔在主体上涂一笔。整张图都在框内时，还需标记背景":
+                L"涂完一笔更新预览 · 看原图可找回漏掉的部分 · 滚轮调笔刷 "+std::to_wstring(brushRadius*2)+L" px";
+            text(dc,hint,{12,88,684,115},13,colors.muted);
+            return;
+        }
         if(!wandMode)return;
         text(dc,L"容差 "+std::to_wstring(tolerance),{12,51,76,83},12,colors.text);
         text(dc,L"圆圈 "+std::to_wstring(brushRadius*2)+L"px",{12,88,80,120},12,colors.text);
-        text(dc,L"拖边框缩放",{508,88,604,120},12,colors.muted);
         const std::wstring hint=(selectedPixels?L"已选 "+std::to_wstring(selectedPixels)+L" 像素 · ":L"")+
             (frameAdjust?L"框内拖动可移动范围 · Esc 退出截图":L"边框可直接缩放 · 滚轮 / [ ] 调圆圈 · Alt 减选 · Esc 退出");
         text(dc,hint,{12,124,604,146},12,colors.muted,false,DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS);
     }
     void createToolbarControls() {
             int x=8;
-            for(size_t i=0;i<TOOL_LABELS.size();++i) {
-                const int buttonWidth=i==5?72:48;
+            for(int i:{0,1,2,3,4,5,SMART_TOOL,6,7,8,9,10,11}) {
+                const int buttonWidth=i==SMART_TOOL?80:i==5?72:i==6?56:48;
                 toolButtons[i]=CreateWindowExW(0,L"BUTTON",TOOL_LABELS[i],WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,
-                    x,6,buttonWidth,36,toolbar,reinterpret_cast<HMENU>(100+i),instance,nullptr);
+                    x,6,buttonWidth,36,toolbar,reinterpret_cast<HMENU>(static_cast<INT_PTR>(100+i)),instance,nullptr);
                 x+=buttonWidth;
             }
             toleranceSlider=CreateWindowExW(0,TRACKBAR_CLASSW,L"相似颜色容差",WS_CHILD|TBS_HORZ|TBS_NOTICKS|WS_TABSTOP,
@@ -648,6 +1074,17 @@ struct App {
                 260,88,112,32,toolbar,reinterpret_cast<HMENU>(206),instance,nullptr);
             wandButtons[7]=CreateWindowExW(0,L"BUTTON",L"收紧到选区",WS_CHILD|WS_TABSTOP|BS_OWNERDRAW,
                 384,88,112,32,toolbar,reinterpret_cast<HMENU>(207),instance,nullptr);
+            wandButtons[8]=CreateWindowExW(0,L"BUTTON",L"跟随渐变",WS_CHILD|WS_TABSTOP|BS_OWNERDRAW,
+                508,88,100,32,toolbar,reinterpret_cast<HMENU>(ID_WAND_GRADIENT),instance,nullptr);
+            mosaicSlider=CreateWindowExW(0,TRACKBAR_CLASSW,L"马赛克块大小",WS_CHILD|TBS_HORZ|TBS_NOTICKS|WS_TABSTOP,
+                156,51,220,32,toolbar,reinterpret_cast<HMENU>(ID_MOSAIC_BLOCK),instance,nullptr);
+            SendMessageW(mosaicSlider,TBM_SETRANGE,TRUE,MAKELPARAM(ps::MinMosaicBlock,ps::MaxMosaicBlock));
+            SendMessageW(mosaicSlider,TBM_SETPOS,TRUE,mosaicBlock);
+            constexpr std::array<const wchar_t*,7> smartLabels{
+                L"框主体",L"保留画笔",L"去除画笔",L"边缘精修",L"看原图",L"应用",L"重置"};
+            for(size_t i=0;i<smartButtons.size();++i)
+                smartButtons[i]=CreateWindowExW(0,L"BUTTON",smartLabels[i],WS_CHILD|WS_TABSTOP|BS_OWNERDRAW,
+                    8+static_cast<int>(i)*96,51,90,32,toolbar,reinterpret_cast<HMENU>(ID_SMART_BOX+i),instance,nullptr);
             updateTightButton();
     }
     void showToolbar() {
@@ -659,11 +1096,16 @@ struct App {
         }
         ShowWindow(toleranceSlider,wandMode?SW_SHOW:SW_HIDE);
         ShowWindow(brushSlider,wandMode?SW_SHOW:SW_HIDE);
+        ShowWindow(mosaicSlider,tool==ps::Tool::Mosaic?SW_SHOW:SW_HIDE);
         for(auto button:wandButtons)ShowWindow(button,wandMode?SW_SHOW:SW_HIDE);
         SetWindowTextW(wandButtons[0],contiguous?L"连续区域":L"全图相似");SetWindowTextW(wandButtons[1],soften?L"柔边 ✓":L"柔边");
         SetWindowTextW(wandButtons[6],frameAdjust?L"完成调整":L"调整截取框");
         updateTightButton();
-        const int barHeight=wandMode?152:48;
+        SetWindowTextW(wandButtons[8],followGradient?L"跟随渐变 ✓":L"跟随渐变");
+        EnableWindow(wandButtons[8],contiguous);
+        for(auto button:smartButtons)ShowWindow(button,smartMode?SW_SHOW:SW_HIDE);
+        updateSmartButtons();
+        const int barHeight=wandMode?152:smartMode?120:tool==ps::Tool::Mosaic?88:48;
         POINT screen{desktop.left+selection.left,desktop.top+selection.bottom};
         HMONITOR monitor=MonitorFromPoint(screen,MONITOR_DEFAULTTONEAREST);MONITORINFO info{};info.cbSize=sizeof(info);GetMonitorInfoW(monitor,&info);
         int x=std::clamp<int>(screen.x,info.rcMonitor.left,std::max<LONG>(info.rcMonitor.left,info.rcMonitor.right-TOOLBAR_WIDTH));
@@ -673,11 +1115,16 @@ struct App {
     }
     void toolbarAction(int index) {
         if(state!=State::Editing)return;
-        finishFrameDrag();finishMagicStroke();
+        finishFrameDrag();finishMagicStroke();finishDrawing();finishSmartGesture();
         if(index<0||index>=static_cast<int>(TOOL_LABELS.size()))return;
+        if(index==SMART_TOOL) {
+            smartMode=!smartMode;wandMode=false;frameAdjust=false;tool=ps::Tool::None;
+            clearMagicSelection();resetSmartCutout();refreshPreview();
+        }
+        if(smartMode&&index<=5){smartMode=false;resetSmartCutout();}
         if(index<5){tool=tool==TOOLS[index]?ps::Tool::None:TOOLS[index];wandMode=false;frameAdjust=false;clearMagicSelection();refreshPreview();}
-        else if(index==5){wandMode=!wandMode;frameAdjust=false;tool=ps::Tool::None;if(!wandMode){clearMagicSelection();refreshPreview();}}
-        else if(index==6)color=(color+1)%static_cast<int>(COLORS.size());
+        else if(index==5){wandMode=!wandMode;frameAdjust=false;tool=ps::Tool::None;if(!wandMode)clearMagicSelection();refreshPreview();}
+        else if(index==6)chooseColor(toolbar?toolbar:overlay,ink,customColors);
         else if(index==7)undo();
         else if(index==8) {startRecording();return;}
         else if(index==9) {saveScreenshot();return;}
@@ -691,11 +1138,24 @@ struct App {
         finishFrameDrag();
         finishMagicStroke();
         if(!wandSeeds.empty()){wandSeeds.pop_back();recomputeMagicSelection();return;}
-        if(!annotations.empty()){annotations.pop_back();clearMagicSelection();refreshDrawing();}
+        finishSmartGesture();
+        if(smartMode&&!IsRectEmpty(&smartSubject)) {
+            if(smartStrokes.empty())resetSmartCutout();
+            else smartStrokes.pop_back();
+            recomputeSmartCutout();
+            return;
+        }
+        finishDrawing();
+        if(annotationHistory.empty())return;
+        auto action=std::move(annotationHistory.back());
+        annotationHistory.pop_back();
+        if(action.previous)annotations[action.index]=std::move(*action.previous);
+        else annotations.pop_back();
+        clearMagicSelection();refreshDrawing();
     }
     void keys(WPARAM key) {
         if(key==VK_ESCAPE){cancelSelection();return;}
-        if(wandMode&&(key==VK_OEM_4||key==VK_OEM_6)){adjustBrush(key==VK_OEM_4?-1:1);return;}
+        if((wandMode||smartMode)&&(key==VK_OEM_4||key==VK_OEM_6)){adjustBrush(key==VK_OEM_4?-1:1);return;}
         if(key==VK_DELETE||key==VK_RETURN||(GetKeyState(VK_CONTROL)&0x8000)){finishFrameDrag();finishMagicStroke();}
         if(state!=State::Editing)return;
         if(key==VK_DELETE&&wandMode)applyCutout(false);
@@ -712,20 +1172,27 @@ struct App {
             if(key=='G')toolbarAction(8);
         }
     }
-    void copyScreenshot() {
-        finishFrameDrag();
-        if(rendered.empty())return;
+    bool prepareScreenshotExport() {
+        finishFrameDrag();finishDrawing();
+        if(rendered.empty())return false;
         if(wandUpdatePending)recomputeMagicSelection();
         if(selectedPixels)applyCutout(true);
+        finishSmartGesture();
+        if(smartMode&&!IsRectEmpty(&smartSubject)&&smartOpacity.empty()) {
+            MessageBeep(MB_ICONINFORMATION);
+            return false;
+        }
+        if(smartMode)applySmartCutout();
+        return true;
+    }
+    void copyScreenshot() {
+        if(!prepareScreenshotExport())return;
         ps::copyImage(main,rendered);
         releaseSelection();state=State::Idle;status=L"截图已复制，可直接粘贴。";
         balloon(L"截图已复制",L"可以粘贴到聊天、文档或图片编辑器。");
     }
     void saveScreenshot() {
-        finishFrameDrag();
-        if(rendered.empty())return;
-        if(wandUpdatePending)recomputeMagicSelection();
-        if(selectedPixels)applyCutout(true);
+        if(!prepareScreenshotExport())return;
         std::filesystem::create_directories(directory);
         wchar_t path[32768]{};const auto initial=filename(L"png");wcsncpy_s(path,initial.c_str(),_TRUNCATE);
         OPENFILENAMEW dialog{};dialog.lStructSize=sizeof(dialog);dialog.hwndOwner=overlay;
@@ -849,22 +1316,25 @@ struct App {
         if(!bind(window,message,l))return DefWindowProcW(window,message,w,l);
         auto& app=from(window);
         try {
-            if(message==WM_PAINT){PAINTSTRUCT paint{};HDC dc=BeginPaint(window,&paint);app.paintOverlay(dc);EndPaint(window,&paint);return 0;}
+            if(message==WM_PAINT){PAINTSTRUCT paint{};HDC dc=BeginPaint(window,&paint);app.paintOverlay(dc,paint.rcPaint);EndPaint(window,&paint);return 0;}
             if(message==WM_ERASEBKGND)return 1;
             if(message==WM_LBUTTONDOWN){app.down(app.point(l));return 0;}
             if(message==WM_MOUSEMOVE){app.move(app.point(l));return 0;}
             if(message==WM_MOUSELEAVE){app.hideBrushCursor();app.brushTracking=false;return 0;}
-            if(message==WM_MOUSEWHEEL&&app.wandMode){
+            if(message==WM_MOUSEWHEEL&&(app.wandMode||app.smartMode)){
                 app.brushWheel+=GET_WHEEL_DELTA_WPARAM(w);
                 const int steps=app.brushWheel/WHEEL_DELTA;app.brushWheel%=WHEEL_DELTA;
                 if(steps)app.adjustBrush(steps);
                 return 0;
             }
+            if(message==WM_CAPTURECHANGED&&(app.drag==Drag::SmartBox||app.drag==Drag::SmartBrush)){app.finishSmartGesture();return 0;}
+            if(message==WM_CAPTURECHANGED&&app.drag==Drag::Select){app.abortRegionDrag();return 0;}
             if(message==WM_CAPTURECHANGED&&app.drag==Drag::Magic){app.finishMagicStroke();return 0;}
+            if(message==WM_CAPTURECHANGED&&app.drag==Drag::Draw){app.finishDrawing();return 0;}
             if(message==WM_CAPTURECHANGED&&(app.drag==Drag::Resize||app.drag==Drag::Move)){app.finishFrameDrag();return 0;}
             if(message==WM_LBUTTONUP){app.up(app.point(l));return 0;}
-            if(message==WM_LBUTTONDBLCLK&&app.state==State::Editing&&app.wandMode){app.down(app.point(l));return 0;}
-            if(message==WM_LBUTTONDBLCLK&&app.state==State::Editing&&app.tool==ps::Tool::None&&!app.wandMode){app.copyScreenshot();return 0;}
+            if(message==WM_LBUTTONDBLCLK&&app.state==State::Editing&&(app.wandMode||app.smartMode)){app.down(app.point(l));return 0;}
+            if(message==WM_LBUTTONDBLCLK&&app.state==State::Editing&&app.tool==ps::Tool::None&&!app.wandMode&&!app.smartMode){app.copyScreenshot();return 0;}
             if(message==WM_RBUTTONUP){app.cancelSelection();return 0;}
             if(message==WM_KEYDOWN){app.keys(w);return 0;}
             if((message==WM_SYSKEYDOWN||message==WM_SYSKEYUP)&&w==VK_MENU){app.invalidateBrushCursor();return 0;}
@@ -878,7 +1348,17 @@ struct App {
         if(!bind(window,message,l))return DefWindowProcW(window,message,w,l);
         auto& app=from(window);
         try {
-            if(message==WM_COMMAND){if(LOWORD(w)>=200&&LOWORD(w)<208)app.wandAction(LOWORD(w));else app.toolbarAction(LOWORD(w)-100);return 0;}
+            if(message==WM_COMMAND){
+                const int id=LOWORD(w);
+                if(id>=ID_SMART_BOX&&id<=ID_SMART_RESET)app.smartAction(id);
+                else if(id>=200&&id<=ID_WAND_GRADIENT)app.wandAction(id);
+                else app.toolbarAction(id-100);
+                return 0;
+            }
+            if(message==WM_HSCROLL&&reinterpret_cast<HWND>(l)==app.mosaicSlider){
+                app.mosaicBlock=static_cast<int>(SendMessageW(app.mosaicSlider,TBM_GETPOS,0,0));
+                RECT label{12,51,156,83};InvalidateRect(window,&label,FALSE);return 0;
+            }
             if(message==WM_HSCROLL&&reinterpret_cast<HWND>(l)==app.brushSlider){
                 app.finishMagicStroke();app.setBrushRadius(static_cast<int>(SendMessageW(app.brushSlider,TBM_GETPOS,0,0)));return 0;
             }
@@ -974,7 +1454,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,LPWSTR,int) {
         MSG message{};while(GetMessageW(&message,nullptr,0,0)>0) {
             if(message.message==WM_KEYDOWN&&app.toolbar&&(message.hwnd==app.toolbar||IsChild(app.toolbar,message.hwnd))&&
                 (message.wParam==VK_ESCAPE||message.wParam==VK_RETURN||message.wParam==VK_DELETE||
-                 (app.wandMode&&(message.wParam==VK_OEM_4||message.wParam==VK_OEM_6))||(GetKeyState(VK_CONTROL)&0x8000))) {
+                 ((app.wandMode||app.smartMode)&&(message.wParam==VK_OEM_4||message.wParam==VK_OEM_6))||(GetKeyState(VK_CONTROL)&0x8000))) {
                 try{app.keys(message.wParam);}catch(const std::exception& exception){app.error(exception.what());}
                 continue;
             }

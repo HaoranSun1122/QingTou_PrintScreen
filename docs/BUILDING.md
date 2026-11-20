@@ -52,7 +52,7 @@ ctest --test-dir build-msvc -C Release --output-on-failure
 
 ### 测试层次
 
-默认测试覆盖 PNG Alpha 往返、GIF 编码、魔棒抠图、拖动笔刷、裁切与真实 PNG 导出尺寸，并通过隐藏窗口 / 离屏画布验证控件。它们不读取用户桌面。
+默认 4 项测试覆盖 PNG Alpha 往返、GIF 编码、魔棒与智能抠图、拖动笔刷、窗口预选、裁切与真实 PNG 导出尺寸，并通过隐藏窗口 / 离屏画布验证控件。智能抠图包含大图宽框细线、单像素、空背景与修补标记用例。它们不读取用户桌面。
 
 桌面采集与录制测试需要可交互 Windows 桌面，可能短暂显示测试窗口并读取屏幕。单独启用：
 
@@ -68,6 +68,8 @@ GitHub Actions 默认只运行不读取桌面的测试。测试图片和临时�
 | --- | --- |
 | `src/main.cpp` | Win32 窗口、托盘、热键、工具栏、选区和编辑交互 |
 | `src/selection.*` | 颜色匹配、连通性、圆形笔刷、蒙版、内容边界与透明预览 |
+| `src/smart_cutout.*` | 背景估计、带标记图割、原图边缘与细节恢复 |
+| `src/raster.cpp` | 增量笔段覆盖率、透明混合与可调马赛克 |
 | `src/image.*` | 桌面采集、D2D 标注、WIC PNG / GIF、剪贴板 |
 | `src/recorder.*` | 录制线程、计时、停止与文件结束处理 |
 | `src/theme.*` | 系统浅色 / 深色配色 |
@@ -92,7 +94,7 @@ The executable is written to `dist/QingTou.exe`. Use `.\tools\package_release.ps
 
 ### Testing
 
-Default tests cover image codecs, alpha, selection, stroke editing, crop bounds, exported PNG dimensions, and native controls rendered on hidden/offscreen canvases. They do not read the user's desktop.
+The four default tests cover image codecs, alpha, color/guided cutouts, strokes, window preselection, crop bounds, exported PNG dimensions, and native controls rendered on hidden/offscreen canvases. Guided cutouts include loose-box thin details, isolated pixels, empty gradients, and correction priority. They do not read the user's desktop.
 
 `.\build.ps1 -DesktopTests` additionally runs interactive desktop capture and recording tests. These can display test windows and read the screen; run them in a suitable test session. GitHub Actions leaves these tests disabled.
 

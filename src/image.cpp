@@ -144,13 +144,51 @@ Bitmap dimmed(const Bitmap& source) {
         for(int c=0;c<3;++c) result.pixels[i+c]=static_cast<uint8_t>(result.pixels[i+c]*0.40);
     return result;
 }
-void drawBitmap(HDC dc,const Bitmap& bitmap,int x,int y) {
-    if(bitmap.empty()) return;
+void drawBitmapRows(HDC dc,const Bitmap& bitmap,int x,int y,RECT dirty) {
+    if(bitmap.empty()||dirty.left>=x+bitmap.width||dirty.right<=x)return;
+    const int first=std::max<LONG>(0,dirty.top-y);
+    const int last=std::min<LONG>(bitmap.height,dirty.bottom-y);
+    if(first>=last)return;
     BITMAPINFO info{};
     info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER); info.bmiHeader.biWidth=bitmap.width;
-    info.bmiHeader.biHeight=-bitmap.height; info.bmiHeader.biPlanes=1;
+    info.bmiHeader.biHeight=first-last; info.bmiHeader.biPlanes=1;
     info.bmiHeader.biBitCount=32; info.bmiHeader.biCompression=BI_RGB;
-    SetDIBitsToDevice(dc,x,y,bitmap.width,bitmap.height,0,0,0,bitmap.height,bitmap.pixels.data(),&info,DIB_RGB_COLORS);
+    const auto* pixels=bitmap.pixels.data()+static_cast<size_t>(first)*bitmap.width*4;
+    SetDIBitsToDevice(dc,x,y+first,bitmap.width,last-first,0,0,0,last-first,pixels,&info,DIB_RGB_COLORS);
+}
+void drawBitmap(HDC dc,const Bitmap& bitmap,int x,int y) {
+    drawBitmapRows(dc,bitmap,x,y,{x,y,x+bitmap.width,y+bitmap.height});
+}
+namespace {
+void createTextLayout(ComPtr<IDWriteFactory>& factory,ComPtr<IDWriteTextLayout>& layout,
+                      const Annotation& annotation,POINT origin,int width,int height) {
+    if(annotation.text.empty()||origin.x>=width||origin.y>=height)return;
+    if(!factory.get())
+        check(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,__uuidof(IDWriteFactory),
+            reinterpret_cast<IUnknown**>(factory.put())),"Create text renderer");
+    ComPtr<IDWriteTextFormat> format;
+    const float size=static_cast<float>(std::clamp(annotation.textSize,MinTextSize,MaxTextSize));
+    check(factory->CreateTextFormat(L"Microsoft YaHei UI",nullptr,DWRITE_FONT_WEIGHT_SEMI_BOLD,
+        DWRITE_FONT_STYLE_NORMAL,DWRITE_FONT_STRETCH_NORMAL,size,L"zh-CN",format.put()),"Create text format");
+    check(factory->CreateTextLayout(annotation.text.c_str(),static_cast<UINT>(annotation.text.size()),format.get(),
+        static_cast<float>(width-origin.x),static_cast<float>(height-origin.y),layout.put()),"Layout annotation text");
+}
+}
+RECT textAnnotationBounds(const Annotation& annotation,POINT origin,int width,int height) {
+    ComPtr<IDWriteFactory> factory;
+    ComPtr<IDWriteTextLayout> layout;
+    createTextLayout(factory,layout,annotation,origin,width,height);
+    if(!layout.get())return {};
+    DWRITE_TEXT_METRICS metrics{};
+    check(layout->GetMetrics(&metrics),"Measure annotation text");
+    if(metrics.width<=0||metrics.height<=0)return {};
+    RECT text{origin.x+static_cast<LONG>(std::floor(metrics.left))-2,
+        origin.y+static_cast<LONG>(std::floor(metrics.top))-2,
+        origin.x+static_cast<LONG>(std::ceil(metrics.left+metrics.width))+2,
+        origin.y+static_cast<LONG>(std::ceil(metrics.top+metrics.height))+2};
+    RECT canvas{0,0,width,height},bounds{};
+    IntersectRect(&bounds,&canvas,&text);
+    return bounds;
 }
 Bitmap annotate(const Bitmap& base,const std::vector<Annotation>& items) {
     if(items.empty()) return base;
@@ -162,17 +200,10 @@ Bitmap annotate(const Bitmap& base,const std::vector<Annotation>& items) {
     check(wic->CreateBitmapFromMemory(base.width,base.height,GUID_WICPixelFormat32bppPBGRA,base.width*4,
         static_cast<UINT>(result.pixels.size()),result.pixels.data(),surface.put()),"Create alpha annotation surface");
     ComPtr<ID2D1Factory> d2d;
-    check(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,d2d.put()), "Create Direct2D factory");
     ComPtr<ID2D1RenderTarget> target;
     auto props=D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT,
         D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,D2D1_ALPHA_MODE_PREMULTIPLIED),96,96);
-    const auto bind=[&]{check(d2d->CreateWicBitmapRenderTarget(surface.get(),props,target.put()),"Create transparent annotation renderer");};
-    bind();
     ComPtr<IDWriteFactory> dw;
-    check(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,__uuidof(IDWriteFactory),reinterpret_cast<IUnknown**>(dw.put())),"Create text renderer");
-    ComPtr<IDWriteTextFormat> format;
-    check(dw->CreateTextFormat(L"Microsoft YaHei UI",nullptr,DWRITE_FONT_WEIGHT_SEMI_BOLD,
-        DWRITE_FONT_STYLE_NORMAL,DWRITE_FONT_STRETCH_NORMAL,22,L"zh-CN",format.put()),"Create text format");
     for(const auto& a:items) {
         if(a.tool==Tool::Cutout) {
             if(a.opacity.size()!=static_cast<size_t>(base.width)*base.height)throw std::runtime_error("Invalid cutout mask");
@@ -184,32 +215,42 @@ Bitmap annotate(const Bitmap& base,const std::vector<Annotation>& items) {
                 const size_t index=static_cast<size_t>(y)*base.width+x,offset=static_cast<size_t>(y)*stride+x*4;
                 for(int c=0;c<4;++c)pixels[offset+c]=static_cast<uint8_t>((pixels[offset+c]*a.opacity[index]+127)/255);
             }
-            locked.reset();bind();continue;
+            continue;
         }
         if(a.points.empty()) continue;
+        if(a.tool==Tool::Pen) {
+            PenCoverage pen(base.width,base.height,a.thickness);
+            pen.extend(a.points.front(),a.points.front());
+            for(size_t i=1;i<a.points.size();++i)pen.extend(a.points[i-1],a.points[i]);
+            target.reset();
+            ComPtr<IWICBitmapLock> locked;
+            check(surface->Lock(nullptr,WICBitmapLockRead|WICBitmapLockWrite,locked.put()),"Lock pen surface");
+            UINT stride=0,size=0;
+            BYTE* pixels=nullptr;
+            check(locked->GetStride(&stride),"Pen stride");
+            check(locked->GetDataPointer(&size,&pixels),"Pen pixels");
+            pen.blend(pixels,stride,nullptr,pen.bounds(),a.color);
+            continue;
+        }
         if(a.tool==Tool::Mosaic && a.points.size()>1) {
-            RECT r=normalized(a.points.front(),a.points.back());
+            const POINT from=a.points.front(),to=a.points.back();
+            if(from.x==to.x&&from.y==to.y)continue;
+            RECT r=normalized(from,to);
+            ++r.right;++r.bottom; // Include the final row and column under the pointer.
             r.left=std::clamp<LONG>(r.left,0,base.width); r.right=std::clamp<LONG>(r.right,0,base.width);
             r.top=std::clamp<LONG>(r.top,0,base.height); r.bottom=std::clamp<LONG>(r.bottom,0,base.height);
+            if(IsRectEmpty(&r))continue;
             target.reset();
             ComPtr<IWICBitmapLock> locked;check(surface->Lock(nullptr,WICBitmapLockRead|WICBitmapLockWrite,locked.put()),"Lock mosaic surface");
             UINT stride=0,size=0;BYTE* pixels=nullptr;
             check(locked->GetStride(&stride),"Mosaic stride");check(locked->GetDataPointer(&size,&pixels),"Mosaic pixels");
-            for(int y=r.top;y<r.bottom;y+=12) for(int x=r.left;x<r.right;x+=12) {
-                uint64_t sums[4]{};
-                for(int yy=y;yy<std::min(y+12,static_cast<int>(r.bottom));++yy)
-                    for(int xx=x;xx<std::min(x+12,static_cast<int>(r.right));++xx) {
-                        const size_t i=static_cast<size_t>(yy)*stride+xx*4;
-                        for(int c=0;c<4;++c) sums[c]+=pixels[i+c];
-                    }
-                for(int yy=y;yy<std::min(y+12,static_cast<int>(r.bottom));++yy)
-                    for(int xx=x;xx<std::min(x+12,static_cast<int>(r.right));++xx) {
-                        const size_t i=static_cast<size_t>(yy)*stride+xx*4;
-                        for(int c=0;c<3;++c)pixels[i+c]=sums[3]?static_cast<uint8_t>((sums[c]*pixels[i+3]+sums[3]/2)/sums[3]):0;
-                    }
-            }
-            locked.reset();bind();
+            pixelatePremultiplied(pixels,stride,r,a.mosaicBlock);
             continue;
+        }
+        if(!target.get()) {
+            if(!d2d.get())
+                check(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,d2d.put()),"Create Direct2D factory");
+            check(d2d->CreateWicBitmapRenderTarget(surface.get(),props,target.put()),"Create transparent annotation renderer");
         }
         target->BeginDraw();
         ComPtr<ID2D1SolidColorBrush> brush;
@@ -226,12 +267,10 @@ Bitmap annotate(const Bitmap& base,const std::vector<Annotation>& items) {
             for(double offset:{-0.55,0.55})
                 target->DrawLine(p(end),D2D1::Point2F(static_cast<float>(end.x-length*std::cos(angle+offset)),
                     static_cast<float>(end.y-length*std::sin(angle+offset))),brush.get(),a.thickness);
-        } else if(a.tool==Tool::Pen) {
-            if(a.points.size()==1) target->FillEllipse(D2D1::Ellipse(p(begin),a.thickness/2,a.thickness/2),brush.get());
-            for(size_t i=1;i<a.points.size();++i) target->DrawLine(p(a.points[i-1]),p(a.points[i]),brush.get(),a.thickness);
         } else if(a.tool==Tool::Text) {
-            target->DrawText(a.text.c_str(),static_cast<UINT>(a.text.size()),format.get(),
-                D2D1::RectF(static_cast<float>(begin.x),static_cast<float>(begin.y),static_cast<float>(base.width),static_cast<float>(base.height)),brush.get());
+            ComPtr<IDWriteTextLayout> layout;
+            createTextLayout(dw,layout,a,begin,base.width,base.height);
+            if(layout.get())target->DrawTextLayout(p(begin),layout.get(),brush.get(),D2D1_DRAW_TEXT_OPTIONS_CLIP);
         }
         check(target->EndDraw(),"Render annotation");
     }

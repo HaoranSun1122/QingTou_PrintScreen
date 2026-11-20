@@ -82,7 +82,7 @@ void testWandInteraction() {
     app.applyCutout(false);
     require(app.rendered.pixels[(5*64+5)*4+3]==0&&app.rendered.pixels[(28*64+5)*4+3]==255,
         "Apply used stale selection while a tolerance update was pending");
-    app.clearMagicSelection();app.annotations.clear();app.base=ps::Bitmap(96,64);
+    app.clearMagicSelection();app.clearAnnotations();app.base=ps::Bitmap(96,64);
     app.selection={340,220,436,284};app.tolerance=10;app.contiguous=true;
     for(int y=0;y<64;++y)for(int x=0;x<96;++x) {
         const bool border=((x==20||x==75)&&y>=14&&y<=50)||((y==14||y==50)&&x>=20&&x<=75);
@@ -299,6 +299,96 @@ void testFrameResizeAndEscape() {
     require(edited.rendered.pixels[(10*edited.rendered.width+130)*4+3]==255,"Remove cutout incorrectly hid newly included pixels");
     std::cout<<"PASS: frame resize/move preserves selections, history, annotations and transparency; one-press Esc cancels immediately\n";
 }
+void testLivePenPreview() {
+    App app;setupFrameTest(app);
+    app.wandMode=false;app.tool=ps::Tool::Pen;app.ink=0x1A2B3C;app.refreshPreview();
+    const auto original=app.preview.pixels;
+    app.down({47,30});
+    require(app.penStroke&&app.penPreview.pixels!=original,"Pen did not show a dot while the button was down");
+    app.move({48,30});app.move({65,39});app.move({82,31});
+    require(app.active.points.size()==4,"Pen dropped the first delivered single-pixel sample");
+    require(app.preview.pixels==original,"Active pen replayed or changed committed annotations");
+    const auto live=app.penPreview.pixels;
+    app.up({82,31});
+    require(!app.penStroke&&app.preview.pixels==live,"Committed opaque pen did not match the live preview");
+    app.undo();
+    require(app.preview.pixels==original,"Undo did not remove the pen as a single stroke");
+    std::cout<<"PASS: incremental pen dot and path, committed preview parity and stroke undo\n";
+}
+void testCaptureHover() {
+    App app;app.state=State::Selecting;
+    app.desktop={-120,-25,180,125};
+    TargetCollector collector{app.desktop,app.captureTargets};
+    collector.add(app.captureTargets.windows,{-150,-15,-20,95});
+    collector.add(app.captureTargets.windows,{-60,5,70,100});
+    collector.add(app.captureTargets.monitors,{-120,-25,30,125});
+    collector.add(app.captureTargets.monitors,{30,-25,180,125});
+    app.screenshot=ps::Bitmap(300,150);
+    for(size_t i=3;i<app.screenshot.pixels.size();i+=4)app.screenshot.pixels[i]=255;
+    const RECT front{0,10,100,120},back{60,30,190,125},monitor{150,0,300,150};
+    app.move({85,46});
+    require(EqualRect(&app.hoverTarget,&front)&&IsRectEmpty(&app.selection),
+        "Hover chose the lower window in the overlap or committed prematurely");
+    app.move({100,46});
+    require(EqualRect(&app.hoverTarget,&back),"Hover did not switch at the front window's edge");
+    app.move({220,80});
+    require(EqualRect(&app.hoverTarget,&monitor),"Hover missed the monitor on the empty desktop");
+    app.down({85,46});
+    app.up({85,46});
+    require(app.state==State::Editing&&EqualRect(&app.selection,&front)&&IsRectEmpty(&app.hoverTarget)&&
+        app.rendered.width==100&&app.rendered.height==110,"Click did not commit the window's clipped physical bounds");
+
+    App drag;drag.state=State::Selecting;drag.desktop=app.desktop;drag.screenshot=app.screenshot;
+    drag.captureTargets.windows={front,back};drag.captureTargets.monitors={monitor};
+    drag.move({85,46});
+    drag.down({85,46});drag.move({140,90});
+    require(IsRectEmpty(&drag.hoverTarget),"Free selection continued to highlight a window after dragging");
+    drag.up({140,90});
+    const RECT manual{85,46,140,90};
+    require(drag.state==State::Editing&&EqualRect(&drag.selection,&manual)&&
+        drag.rendered.width==55&&drag.rendered.height==44,"Window preselection replaced a manual drag");
+
+    App tiny;tiny.state=State::Selecting;tiny.desktop=app.desktop;tiny.screenshot=app.screenshot;
+    tiny.captureTargets.windows={front,back};
+    tiny.down({85,46});tiny.move({140,46});tiny.up({140,46});
+    require(tiny.state==State::Selecting&&IsRectEmpty(&tiny.selection)&&
+        EqualRect(&tiny.hoverTarget,&back),"Invalid drag unexpectedly selected a window or left a stale highlight");
+    std::cout<<"PASS: z-order hover, physical coordinates, monitor fallback, click and free drag\n";
+}
+void testSmartTool() {
+    App app;app.state=State::Editing;app.smartMode=true;app.selection={40,50,240,180};
+    app.base=ps::Bitmap(200,130);
+    for(int y=0;y<130;++y)for(int x=0;x<200;++x) {
+        const bool logo=x>=65&&x<135&&y>=40&&y<90;
+        const int gray=65+x/2+y/3;
+        auto* p=app.base.pixels.data()+(static_cast<size_t>(y)*200+x)*4;
+        p[0]=static_cast<uint8_t>(logo?32:gray);p[1]=static_cast<uint8_t>(logo?60:gray);
+        p[2]=static_cast<uint8_t>(logo?220:gray);p[3]=255;
+    }
+    app.rendered=app.base;app.refreshPreview();
+    app.down({75,75});app.move({200,155});app.up({200,155});
+    require(app.smartTool==SmartTool::Keep&&!app.smartOpacity.empty()&&app.smartOpacity[60*200+100]==255&&
+        app.smartOpacity[0]==0,"Dragging the box did not initialize a transparent preview");
+    require(app.rendered.pixels[3]==255&&app.preview.pixels[0]==238,
+        "Preview changed the committed screenshot or failed to show checkerboard");
+    app.smartAction(ID_SMART_ORIGINAL);
+    require(app.preview.pixels==app.base.pixels,"Original-view button did not restore screenshot preview");
+    app.smartAction(ID_SMART_ORIGINAL);
+    app.smartAction(ID_SMART_REMOVE);app.down({140,110});app.up({140,110});
+    require(app.smartOpacity[60*200+100]==0&&app.smartStrokes.size()==1,"Remove brush did not change the marked pixel");
+    app.smartAction(ID_SMART_KEEP);app.down({140,110});app.up({140,110});
+    require(app.smartOpacity[60*200+100]==255,"Keep brush did not recover removed content");
+    app.undo();
+    require(app.smartOpacity[60*200+100]==0,"Undo did not restore the previous mark");
+    app.undo();
+    require(app.smartOpacity[60*200+100]==255,"Undo lost the initial smart cutout");
+    app.smartAction(ID_SMART_APPLY);
+    require(!app.smartMode&&app.rendered.pixels[3]==0&&app.rendered.pixels[(60*200+100)*4+3]==255,
+        "Apply failed to commit smart opacity as a transparent cutout");
+    app.undo();
+    require(app.rendered.pixels==app.base.pixels,"Undo after applying cutout did not restore the screenshot");
+    std::cout<<"PASS: smart box, original view, correction brushes, apply and undo\n";
+}
 void renderToolbarTest(App& app) {
     BITMAPINFO info{};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);info.bmiHeader.biWidth=TOOLBAR_WIDTH;info.bmiHeader.biHeight=-152;
     info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;info.bmiHeader.biCompression=BI_RGB;
@@ -331,7 +421,12 @@ void testToolbarControls() {
     require(RegisterClassW(&cls)!=0,"Cannot register hidden toolbar test");
     app.toolbar=CreateWindowExW(0,cls.lpszClassName,L"Hidden toolbar test",WS_POPUP,0,0,TOOLBAR_WIDTH,152,nullptr,nullptr,app.instance,&app);
     require(app.toolbar!=nullptr,"Cannot create hidden toolbar test");app.createToolbarControls();
-    require(app.brushSlider&&app.toleranceSlider&&!IsWindowVisible(app.toolbar),"Toolbar test unexpectedly opened on the desktop");
+    require(app.brushSlider&&app.toleranceSlider&&app.mosaicSlider&&!IsWindowVisible(app.toolbar),"Toolbar test unexpectedly opened on the desktop");
+    SendMessageW(app.mosaicSlider,TBM_SETPOS,TRUE,37);
+    SendMessageW(app.toolbar,WM_HSCROLL,MAKEWPARAM(TB_THUMBTRACK,37),reinterpret_cast<LPARAM>(app.mosaicSlider));
+    require(app.mosaicBlock==37&&app.tolerance==18,"Mosaic slider did not update its own tool settings");
+    SendMessageW(app.toolbar,WM_COMMAND,MAKEWPARAM(ID_WAND_GRADIENT,BN_CLICKED),reinterpret_cast<LPARAM>(app.wandButtons[8]));
+    require(app.followGradient,"Gradient button did not enable the gradient selection mode");
     SendMessageW(app.brushSlider,TBM_SETPOS,TRUE,20);
     SendMessageW(app.toolbar,WM_HSCROLL,MAKEWPARAM(TB_THUMBTRACK,20),reinterpret_cast<LPARAM>(app.brushSlider));
     require(app.brushRadius==20&&app.tolerance==18,"Circle size slider changed tolerance or failed to update brush");
@@ -408,8 +503,10 @@ int main(int argc,char** argv) {
     try {
         SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         ps::ComApartment apartment;
-        if(argc==2&&std::string(argv[1])=="--wand"){testWandInteraction();testAccumulatingLogoSelection();testBrushSelection();testBrushCursor();testFrameResizeAndEscape();testToolbarControls();testTightOutputFrame();return 0;}
-        if(argc!=1)throw std::runtime_error("Usage: window_capture_tests [--wand]");
+        if(argc==2&&std::string(argv[1])=="--wand"){testWandInteraction();testAccumulatingLogoSelection();testBrushSelection();testBrushCursor();testFrameResizeAndEscape();testLivePenPreview();testToolbarControls();testTightOutputFrame();return 0;}
+        if(argc==2&&std::string(argv[1])=="--hover"){testCaptureHover();return 0;}
+        if(argc==2&&std::string(argv[1])=="--smart"){testSmartTool();return 0;}
+        if(argc!=1)throw std::runtime_error("Usage: window_capture_tests [--wand | --hover | --smart]");
         INITCOMMONCONTROLSEX controls{sizeof(controls),ICC_STANDARD_CLASSES|ICC_WIN95_CLASSES};InitCommonControlsEx(&controls);
         HINSTANCE instance=GetModuleHandleW(nullptr);
         WNDCLASSW cls{};cls.lpfnWndProc=backgroundProc;cls.hInstance=instance;cls.lpszClassName=L"QingTou.TestBackground";

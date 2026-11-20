@@ -1,6 +1,7 @@
 #include "image.h"
 #include "recorder.h"
 #include "selection.h"
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <iostream>
@@ -8,6 +9,7 @@
 
 void testWandQuality(const std::filesystem::path& output);
 void testSelectionSessions();
+void testSmartCutout();
 void require(bool value,const char* explanation) {if(!value)throw std::runtime_error(explanation);}
 ps::Bitmap decode(const std::filesystem::path& file,UINT frameIndex=0,UINT* count=nullptr,unsigned* delay=nullptr) {
     ps::ComPtr<IWICImagingFactory> factory;
@@ -76,6 +78,7 @@ int main(int argc,char** argv) {
         std::cout<<"PASS: connected/global magic wand, tolerance, add/subtract/invert, transparent seed\n";
         testWandQuality(output);
         testSelectionSessions();
+        testSmartCutout();
         auto icon=solid(48,48,255,255,255);
         for(int y=12;y<36;++y)for(int x=12;x<36;++x){const size_t i=(y*48+x)*4;icon.pixels[i]=200;icon.pixels[i+1]=80;icon.pixels[i+2]=20;}
         const auto background=ps::selectSimilar(icon,{0,0},0,true);
@@ -115,13 +118,31 @@ int main(int argc,char** argv) {
         ps::Annotation rectangle;rectangle.tool=ps::Tool::Rectangle;rectangle.points={{5,5},{70,50}};
         auto annotated=ps::annotate(blue,{rectangle});require(annotated.pixels!=blue.pixels,"Direct2D annotation was not drawn");
         require(annotated.pixels[(60*96+90)*4]==255,"Annotation changed pixels outside its bounds");
-        ps::Annotation label;label.tool=ps::Tool::Text;label.points={{8,8}};label.text=L"PNG / GIF";
-        require(ps::annotate(blue,{label}).pixels!=blue.pixels,"Text annotation was not drawn");
+        ps::Annotation label;label.tool=ps::Tool::Text;label.points={{8,8}};label.text=L"Text";
+        label.textSize=12;
+        const auto smallText=ps::annotate(blue,{label});
+        const RECT smallBounds=ps::textAnnotationBounds(label,label.points.front(),blue.width,blue.height);
+        label.textSize=30;label.color=0x28D440;
+        const auto largeText=ps::annotate(blue,{label});
+        const RECT largeBounds=ps::textAnnotationBounds(label,label.points.front(),blue.width,blue.height);
+        require(largeBounds.right-largeBounds.left>smallBounds.right-smallBounds.left&&
+            largeBounds.bottom-largeBounds.top>smallBounds.bottom-smallBounds.top,
+            "Text hit region ignored font size");
+        require(smallText.pixels!=blue.pixels&&largeText.pixels!=smallText.pixels,"Size/color controls did not change rendered text");
+        int maxGreen=0;
+        for(size_t i=1;i<largeText.pixels.size();i+=4)maxGreen=std::max<int>(maxGreen,largeText.pixels[i]);
+        require(maxGreen>160,"Custom text color was not passed to the renderer");
         auto gradient=solid(48,48,0,0,0);for(int y=0;y<48;++y)for(int x=0;x<48;++x)gradient.pixels[(y*48+x)*4]=static_cast<uint8_t>(x*5);
         ps::Annotation mosaic;mosaic.tool=ps::Tool::Mosaic;mosaic.points={{0,0},{24,24}};
         auto masked=ps::annotate(gradient,{mosaic});require(masked.pixels[0]==masked.pixels[4*11],"Mosaic did not replace a block");
         require(masked.pixels[4*30]==gradient.pixels[4*30],"Mosaic modified pixels outside selection");
-        std::cout<<"PASS: Direct2D shapes, DirectWrite text, bounded mosaic\n";
+        mosaic.mosaicBlock=4;const auto fine=ps::annotate(gradient,{mosaic});
+        mosaic.mosaicBlock=64;const auto coarse=ps::annotate(gradient,{mosaic});
+        require(fine.pixels[0]==fine.pixels[4*3]&&fine.pixels[0]!=fine.pixels[4*4],
+            "Fine mosaic ignored the configured block size");
+        require(coarse.pixels[0]==coarse.pixels[4*24]&&coarse.pixels[4*25]==gradient.pixels[4*25],
+            "Coarse mosaic skipped the final column or covered unselected pixels");
+        std::cout<<"PASS: Direct2D shapes, text size/color, and configurable bounded mosaic\n";
         std::cout<<"All image and selection checks passed.\n";return 0;
     }catch(const std::exception& e){std::cerr<<"FAIL: "<<e.what()<<'\n';return 1;}
 }

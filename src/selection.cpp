@@ -76,9 +76,10 @@ struct SimilarSelection::Impl {
     float squaredLimit,squaredEdgeLimit;
 
     static const ColorTables& colorTables() {static const ColorTables value;return value;}
-    Impl(const Bitmap& source,int limit,bool connected):image(source),tolerance(std::clamp(limit,0,100)),
+    Impl(const Bitmap& source,int limit,bool connected,bool followGradient):image(source),tolerance(std::clamp(limit,0,100)),
         contiguous(connected),state(connected?static_cast<size_t>(source.width)*source.height:0,0),tables(colorTables()) {
-        squaredLimit=static_cast<float>(tolerance*tolerance);
+        const float seedLimit=tolerance*(connected&&followGradient?3.0f:1.0f);
+        squaredLimit=seedLimit*seedLimit;
         const float edgeLimit=std::clamp(2.0f+tolerance*0.08f,2.5f,4.0f);
         squaredEdgeLimit=edgeLimit*edgeLimit;
     }
@@ -181,7 +182,8 @@ struct SimilarSelection::Impl {
         }
     }
 };
-SimilarSelection::SimilarSelection(const Bitmap& image,int tolerance,bool contiguous):impl_(std::make_unique<Impl>(image,tolerance,contiguous)){}
+SimilarSelection::SimilarSelection(const Bitmap& image,int tolerance,bool contiguous,bool followGradient)
+    :impl_(std::make_unique<Impl>(image,tolerance,contiguous,followGradient)){}
 SimilarSelection::~SimilarSelection()=default;
 SelectionChange SimilarSelection::select(SelectionMask& selection,POINT seed,bool subtract) {
     const auto& image=impl_->image;
@@ -189,9 +191,9 @@ SelectionChange SimilarSelection::select(SelectionMask& selection,POINT seed,boo
     if(selection.size()!=count)selection.assign(count,0);
     SelectionChange change;impl_->select(selection,seed,subtract,change);return change;
 }
-SelectionMask selectSimilar(const Bitmap& image,POINT seed,int tolerance,bool contiguous) {
+SelectionMask selectSimilar(const Bitmap& image,POINT seed,int tolerance,bool contiguous,bool followGradient) {
     SelectionMask selected(static_cast<size_t>(image.width)*image.height,0);
-    SimilarSelection selector(image,tolerance,contiguous);selector.select(selected,seed);return selected;
+    SimilarSelection selector(image,tolerance,contiguous,followGradient);selector.select(selected,seed);return selected;
 }
 SelectionChange SimilarSelection::brush(SelectionMask& selection,POINT from,POINT to,int radius,bool subtract) {
     const auto& image=impl_->image;SelectionChange change;
@@ -284,11 +286,11 @@ SelectionMask cutoutOpacity(const SelectionMask& selection,int width,int height,
     }
     return opacity;
 }
-Bitmap transparencyPreview(const Bitmap& image,const SelectionMask& selection) {
+Bitmap transparencyPreview(const Bitmap& image,const SelectionMask& selection,const SelectionMask& opacity) {
     Bitmap result(image.width,image.height);
-    updateTransparencyPreview(result,image,selection,{0,0,image.width,image.height});return result;
+    updateTransparencyPreview(result,image,selection,{0,0,image.width,image.height},opacity);return result;
 }
-RECT updateTransparencyPreview(Bitmap& result,const Bitmap& image,const SelectionMask& selection,RECT changed) {
+RECT updateTransparencyPreview(Bitmap& result,const Bitmap& image,const SelectionMask& selection,RECT changed,const SelectionMask& opacity) {
     if(image.empty()){result={};return {};}
     if(result.width!=image.width||result.height!=image.height||result.empty()) {
         result=Bitmap(image.width,image.height);changed={0,0,image.width,image.height};
@@ -297,10 +299,12 @@ RECT updateTransparencyPreview(Bitmap& result,const Bitmap& image,const Selectio
         changed.left=std::max<LONG>(0,changed.left-1);changed.top=std::max<LONG>(0,changed.top-1);
         changed.right=std::min<LONG>(image.width,changed.right+1);changed.bottom=std::min<LONG>(image.height,changed.bottom+1);
     }
-    const bool hasSelection=selection.size()==static_cast<size_t>(image.width)*image.height;
+    const size_t pixels=static_cast<size_t>(image.width)*image.height;
+    const bool hasSelection=selection.size()==pixels,hasOpacity=opacity.size()==pixels;
     for(int y=changed.top;y<changed.bottom;++y)for(int x=changed.left;x<changed.right;++x) {
         const size_t index=static_cast<size_t>(y)*image.width+x,i=index*4;
-        const unsigned alpha=image.pixels[i+3];const unsigned background=((x/8+y/8)%2)?204:238;
+        const unsigned alpha=hasOpacity?(image.pixels[i+3]*opacity[index]+127)/255:image.pixels[i+3];
+        const unsigned background=((x/8+y/8)%2)?204:238;
         for(size_t channel=0;channel<3;++channel)
             result.pixels[i+channel]=static_cast<uint8_t>((image.pixels[i+channel]*alpha+background*(255-alpha)+127)/255);
         if(hasSelection&&selection[index]) {

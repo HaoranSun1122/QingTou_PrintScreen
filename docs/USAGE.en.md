@@ -8,6 +8,10 @@ The current app UI is Chinese. The table below maps the labels used in this guid
 | --- | --- |
 | 截图 / 抠图 | Screenshot / cutout |
 | 魔棒抠图 | Color cutout tool |
+| 智能抠图 | Guided subject cutout |
+| 框选主体 / 保留画笔 / 去除画笔 | Subject box / Keep brush / Remove brush |
+| 边缘精修 / 看原图 / 应用 | Edge refinement / original view / Apply |
+| 跟随渐变 | Follow gradients in contiguous mode |
 | 容差 / 圆圈 | Tolerance / circle diameter |
 | 连续区域 / 全图相似 | Contiguous region / similar colors globally |
 | 柔边 | Feather edges |
@@ -33,11 +37,33 @@ Hide-window-on-capture is enabled by default and applies to buttons, hotkeys, an
 
 ## Take a screenshot
 
-1. Press `Ctrl + Alt + Q` and drag to select a region.
+1. Press `Ctrl + Alt + Q`, hover to preselect a window, then click to confirm. Empty desktop areas select the monitor; hold and drag for a free region.
 2. Add rectangles, arrows, pen strokes, text, or mosaic as needed. Use `Ctrl + Z` to undo.
 3. Press `Enter` / `Ctrl + C` to copy, or `Ctrl + S` to save a PNG.
 
 `Esc` exits the current capture in one step. Use Clear if you only want to reset the cutout selection and continue editing.
+
+Preselection uses the desktop frozen when capture starts. Occluded windows contain the pixels actually visible at that time.
+
+## Guided subject cutouts
+
+1. After capturing, click **智能抠图** and box the whole subject, leaving some background outside the box.
+2. Release to preview transparency. Use **保留画笔** (Keep) for missing subject pixels and **去除画笔** (Remove) for unwanted background. The result is recalculated after each stroke.
+3. Adjust size with the wheel or `[` / `]`, and undo with `Ctrl + Z`. Compare the original using **看原图**, or toggle **边缘精修** to compare edge treatment.
+4. Click **应用** (Apply), then resize/trim the capture frame and save. Copying or saving also applies a valid preview.
+
+![Guided cutout toolbar: subject box, Keep/Remove brushes, refinement, and original view](toolbar-smart.png)
+
+Processing stays on your computer. When boxing the entire image, provide background samples with Remove and foreground samples with Keep. An empty result leaves the original intact; add guidance before exporting.
+
+Large images use a bounded segmentation grid. With a reliable smooth-gradient background, version 0.9.6 preserves thin foreground evidence inside cells and removes their background at original resolution. Complex textures, matching colors, and hair may still need tighter boxes and manual corrections.
+
+## Text, colors, and mosaic
+
+- Text sizes range from 8 to 144 px. Click an existing annotation in Text mode to edit its content, size, or color; hold `Ctrl` to create nearby text. Edits can be undone.
+- **颜色…** and the text dialog open the system color picker with arbitrary RGB colors.
+- The Mosaic slider ranges from 4 to 64 px. Larger blocks retain less detail; new regions use the current setting.
+- Pen strokes show a dot on press and update incrementally. Undo removes a whole stroke.
 
 ## Transparent PNG and multicolor logos
 
@@ -69,6 +95,7 @@ Modifiers are captured when the left button is pressed. Strokes that do not chan
 
 - **Circle**: 10 px by default, adjustable from 2 to 128 px using the size slider, mouse wheel, or `[` / `]`. The size stays fixed during a stroke.
 - **Tolerance**: 18 by default. Increase it to accept more color variation; decrease it to reduce unwanted selection. Changes recompute the existing selection.
+- **Follow gradients**: expands the seed-color range in contiguous mode while respecting detected edges. It is off by default; weak boundaries or similar foreground colors may need lower tolerance or subtraction.
 - **Contiguous**: uses four-way connectivity and local edge checks to reduce leakage through pale outlines or diagonal contacts.
 - **Global**: toggle the contiguous button to match similar colors throughout the capture area.
 - **Feather**: enabled by default, softening inside the retained region. Turn it off for pixel art.

@@ -27,6 +27,7 @@ jobs:
         with:
           name: QingTou-Windows
           path: |
+            dist/QingTou.exe
             dist/QingTou-v*.zip
             dist/SHA256SUMS.txt
           if-no-files-found: error

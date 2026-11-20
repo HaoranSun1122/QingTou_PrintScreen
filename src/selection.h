@@ -13,7 +13,7 @@ class SimilarSelection {
     struct Impl;
     std::unique_ptr<Impl> impl_;
 public:
-    SimilarSelection(const Bitmap& image, int tolerance, bool contiguous);
+    SimilarSelection(const Bitmap& image, int tolerance, bool contiguous, bool followGradient=false);
     ~SimilarSelection();
     SelectionChange select(SelectionMask& selection, POINT seed, bool subtract=false);
     SelectionChange brush(SelectionMask& selection, POINT from, POINT to, int radius, bool subtract=false);
@@ -22,7 +22,8 @@ public:
 // lightness sensitivity for shadows, 100 accepts every nontransparent color.
 // Contiguous mode follows four-connected pixels and, below tolerance 100,
 // respects local color edges so similar adjacent panels do not merge.
-SelectionMask selectSimilar(const Bitmap& image, POINT seed, int tolerance, bool contiguous);
+// Gradient mode allows broader drift from the seed while preserving those edges.
+SelectionMask selectSimilar(const Bitmap& image, POINT seed, int tolerance, bool contiguous, bool followGradient=false);
 // Sweep a circular brush along a segment, expanding the colors under the brush.
 // The destination is updated in place; already-added/removed pixels are skipped.
 bool brushSimilar(const Bitmap& image, SelectionMask& selection, POINT from, POINT to,
@@ -36,8 +37,10 @@ SelectionMask reframeMask(const SelectionMask& mask, RECT from, RECT to, uint8_t
 RECT contentBounds(const Bitmap& image, const SelectionMask& selection = {});
 SelectionMask cutoutOpacity(const SelectionMask& selection, int width, int height, bool keep, bool soften);
 // Preview is opaque. The checkerboard and blue selection tint are never exported.
-Bitmap transparencyPreview(const Bitmap& image, const SelectionMask& selection = {});
+Bitmap transparencyPreview(const Bitmap& image, const SelectionMask& selection = {},
+                           const SelectionMask& opacity = {});
 // Update only changed pixels and their one-pixel selection-outline halo.
 // A missing or differently sized preview is rebuilt completely.
-RECT updateTransparencyPreview(Bitmap& preview, const Bitmap& image, const SelectionMask& selection, RECT changed);
+RECT updateTransparencyPreview(Bitmap& preview, const Bitmap& image, const SelectionMask& selection, RECT changed,
+                               const SelectionMask& opacity = {});
 } // namespace ps

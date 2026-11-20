@@ -114,6 +114,19 @@ void testWandQuality(const std::filesystem::path& output) {
     for(int y=0;y<8;++y)for(int x=0;x<256;++x)setPixel(ramp,x,y,255-x,255-x,255-x);
     auto mask=ps::selectSimilar(ramp,{0,0},18,true);
     require(mask[0]&&mask[40]&&!mask[180]&&!mask[255],"Gradual gradient drift crossed into unrelated dark colors");
+    ps::Bitmap gradientPanel(224,48);
+    for(int y=0;y<48;++y)for(int x=0;x<224;++x) {
+        const int gray=x<192?244-x*130/191:150;
+        setPixel(gradientPanel,x,y,gray,gray,gray);
+    }
+    const auto fixed=ps::selectSimilar(gradientPanel,{0,24},18,true);
+    const auto followed=ps::selectSimilar(gradientPanel,{0,24},18,true,true);
+    require(!fixed[24*224+191]&&followed[24*224+191],"Gradient mode did not reach the far end of a smooth ramp");
+    require(std::count(followed.begin(),followed.end(),255)==192*48,"Gradient mode crossed a nearby panel edge");
+    require(ps::selectSimilar(gradientPanel,{0,24},0,true,true)==ps::selectSimilar(gradientPanel,{0,24},0,true),
+        "Gradient mode overrode exact matching");
+    require(ps::selectSimilar(gradientPanel,{0,24},18,false,true)==ps::selectSimilar(gradientPanel,{0,24},18,false),
+        "Gradient mode changed global color matching");
     ps::Bitmap separated(64,32);
     for(int y=0;y<32;++y)for(int x=0;x<64;++x)setPixel(separated,x,y,x==31?0:245,x==31?0:245,x==31?0:245);
     mask=ps::selectSimilar(separated,{5,5},18,true);require(mask[5*64+5]&&!mask[5*64+45],"Contiguous mode crossed a solid barrier");
